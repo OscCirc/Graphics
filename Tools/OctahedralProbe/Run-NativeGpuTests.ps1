@@ -11,6 +11,17 @@ $toolset = Get-ChildItem -LiteralPath (Join-Path $visualStudioRoot 'VC/Tools/MSV
 $sdkRoot = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits/10'
 $sdkVersion = Get-ChildItem -LiteralPath (Join-Path $sdkRoot 'Include') -Directory | Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName 'um/d3d11.h') } | Sort-Object Name -Descending | Select-Object -First 1
 $compiler = Join-Path $toolset.FullName 'bin/Hostx64/x64/cl.exe'
+$shaderCompiler = Join-Path $sdkRoot "bin/$($sdkVersion.Name)/x64/dxc.exe"
+$uploadShader = Join-Path $PSScriptRoot 'NativeProbeUpload.hlsl'
+& $shaderCompiler -I $repositoryRoot -T vs_6_0 -E VertQuadPadding -Fo (Join-Path $OutputPath 'upload-vertex.bin') $uploadShader
+if ($LASTEXITCODE -ne 0) { throw 'Production upload vertex stage compilation failed.' }
+& $shaderCompiler -I $repositoryRoot -T ps_6_0 -E Frag -Fo (Join-Path $OutputPath 'upload-fragment.bin') $uploadShader
+if ($LASTEXITCODE -ne 0) { throw 'Production upload fragment stage compilation failed.' }
+@{ backend = 'DXC with Unity D3D11/XR aliases'; passed = 2; failed = 0; stages = @(
+    @{ entry = 'VertQuadPadding'; profile = 'vs_6_0'; source = 'actual Core Blit.hlsl' },
+    @{ entry = 'Frag'; profile = 'ps_6_0'; source = 'wrapper calling actual OctahedralProbeSource.hlsl' }
+) } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $OutputPath 'shader-stage-results.json')
+Write-Output 'PASS upload vertex and fragment helper wrapper compilation (DXC)'
 $previousPath = $env:PATH
 try {
     $env:PATH = (Split-Path $compiler) + ';' + $previousPath
@@ -22,7 +33,7 @@ try {
     & $compiler /nologo /std:c++17 /EHsc /O2 @includes (Join-Path $PSScriptRoot 'NativeGpuTests.cpp') ('/Fo' + (Join-Path $OutputPath 'NativeGpuTests.obj')) ('/Fe' + $executable) /link @libraries
     if ($LASTEXITCODE -ne 0) { throw 'Native GPU harness compilation failed.' }
     $shader = Join-Path $repositoryRoot 'Packages/com.unity.render-pipelines.high-definition/Samples~/SharedOctahedralProbe/SharedOctahedralProbe.compute'
-    & $executable $shader $OutputPath
+    & $executable $shader $OutputPath (Join-Path $PSScriptRoot 'NativeProbeImport.compute')
     if ($LASTEXITCODE -ne 0) { throw "Native GPU tests failed. See $OutputPath" }
 }
 finally { $env:PATH = $previousPath }

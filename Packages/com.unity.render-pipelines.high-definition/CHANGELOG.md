@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Added
 - Added an experimental shared-capture Octahedral Probe Atlas sample with per-face reprojection, GGX prefiltering, and standalone GPU validation tools.
+- Added an opt-in external Oct upload API and sample bridge for Custom reflection probes, preserving the existing HDRP atlas layout and Lit sampling while removing per-probe source texture ownership.
 
 Version Updated
 The version number for this package has increased due to a version update of a related graphics package.

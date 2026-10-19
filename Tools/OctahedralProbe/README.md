@@ -4,11 +4,18 @@ The implementation is in [the experimental HDRP sample](../../Packages/com.unity
 
 ## Run checks
 
-From the repository root, in PowerShell:
+From the repository root, in PowerShell 7:
 
 ```powershell
 # Compiles the runtime sample, example and Editor tests against installed Editor assemblies.
 ./Tools/OctahedralProbe/Test-Compile.ps1
+
+# Parses all modified HDRP C# files and the bridge for both Player and Editor configurations.
+# This is explicitly not a complete HDRP type/assembly build.
+./Tools/OctahedralProbe/Test-Syntax.ps1
+
+# Executes the actual production source-layout validator without Unity (requires .NET 9 SDK).
+dotnet run --project Tools/OctahedralProbe/ManagedLayoutTests/ManagedLayoutTests.csproj -- ./artifacts/OctahedralProbeManaged
 
 # Compiles and runs the original sample HLSL on a real D3D11 hardware device.
 # Requires MSVC C++ tools and the Windows SDK; no Editor license is involved.
@@ -21,7 +28,9 @@ From the repository root, in PowerShell:
 
 All scripts accept `-OutputPath`. The Editor scripts accept `-EditorRoot` or `-EditorPath` respectively. Defaults use the locally installed Tuanjie 2022.3.62t15. The GPU test runner creates an isolated generated project under its output folder, copies only the prototype sources, and does not open or modify an existing user project. Outputs default to the ignored `artifacts/` directory.
 
-The native harness uses D3DCompile, shader reflection, RGBAHalf SRV/UAV textures and synchronous GPU readback. It executes `FilterCube`, `CopyFace`, `FilterOct` and `SampleAtlas` from the **same** `.compute` and `.hlsl` files as the sample. It does not substitute a CPU implementation or a different shader language. Native tests validate texture math, not Unity's C# scheduler or camera orientation.
+The native harness uses D3DCompile, shader reflection, RGBAHalf SRV/UAV textures and synchronous GPU readback. It executes `FilterCube`, `CopyFace`, `FilterOct` and `SampleAtlas` from the **same** `.compute` and `.hlsl` files as the sample. It also executes the production `OctahedralProbeSource.hlsl` importer through a compute test wrapper, verifying HDRP border conversion, roughness-level remapping, source region selection and source reuse. It does not substitute a CPU implementation or a different shader language. Native tests validate texture math, not Unity's C# scheduler or camera orientation.
+
+The script separately invokes DXC on the actual Core `VertQuadPadding` stage and a pixel-stage wrapper calling the production upload helper, with Unity's D3D11/XR texture aliases defined. This checks stage compilation; it is not a Unity ShaderLab/RenderGraph integration run.
 
 The Editor suite additionally checks source texture reuse, content versions, incomplete capture publication, workspace ownership, failed capture cleanup, slot reuse, disposal, and six actual camera views. Its asymmetric room patches detect within-face UV flips.
 

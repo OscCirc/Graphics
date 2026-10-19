@@ -1,18 +1,78 @@
 {
-  "backend": "D3D11 hardware, RGBAHalf, original sample HLSL",
+  "backend": "D3D11 hardware, RGBAHalf, original sample and production upload HLSL",
   "gpu": "NVIDIA GeForce RTX 5060 Laptop GPU",
   "cases": [
-    {"name":"all four compute entry points compile","passed":true,"metric":0},
-    {"name":"shared cube updates preserve independent probe tiles","passed":true,"metric":0},
-    {"name":"constant HDR radiance is preserved at every GGX mip","passed":true,"metric":0.00195312},
-    {"name":"cube direction reprojection and border match analytic reference","passed":true,"metric":0.00147307},
-    {"name":"six individual faces reconstruct the same Oct image","passed":true,"metric":0.00292969},
-    {"name":"Oct-source GGX matches cube-source GGX across roughness mips","passed":true,"metric":0.00146484},
-    {"name":"fractional LOD and Oct boundary do not bleed adjacent tiles","passed":true,"metric":0.000146508},
-    {"name":"fractional LOD matches independent integer-LOD samples","passed":true,"metric":9.31323e-10},
-    {"name":"roughness removes high-frequency directional variance","passed":true,"metric":0.000543684},
-    {"name":"all partial face updates preserve pixels owned by other faces","passed":true,"metric":0}
+    {
+      "name": "all four compute entry points compile",
+      "passed": true,
+      "metric": 0
+    },
+    {
+      "name": "shared cube updates preserve independent probe tiles",
+      "passed": true,
+      "metric": 0
+    },
+    {
+      "name": "constant HDR radiance is preserved at every GGX mip",
+      "passed": true,
+      "metric": 0.00195312
+    },
+    {
+      "name": "cube direction reprojection and border match analytic reference",
+      "passed": true,
+      "metric": 0.00147307
+    },
+    {
+      "name": "six individual faces reconstruct the same Oct image",
+      "passed": true,
+      "metric": 0.00292969
+    },
+    {
+      "name": "Oct-source GGX matches cube-source GGX across roughness mips",
+      "passed": true,
+      "metric": 0.00146484
+    },
+    {
+      "name": "fractional LOD and Oct boundary do not bleed adjacent tiles",
+      "passed": true,
+      "metric": 0.000146508
+    },
+    {
+      "name": "fractional LOD matches independent integer-LOD samples",
+      "passed": true,
+      "metric": 9.31323e-10
+    },
+    {
+      "name": "roughness removes high-frequency directional variance",
+      "passed": true,
+      "metric": 0.000543684
+    },
+    {
+      "name": "all partial face updates preserve pixels owned by other faces",
+      "passed": true,
+      "metric": 0
+    },
+    {
+      "name": "production Oct import helper compiles",
+      "passed": true,
+      "metric": 0
+    },
+    {
+      "name": "production import consumes a shared source before it is reused",
+      "passed": true,
+      "metric": 0.000976562
+    },
+    {
+      "name": "production import converts border layout and roughness mip range",
+      "passed": true,
+      "metric": 0.00100833
+    },
+    {
+      "name": "production import selects the requested source tile",
+      "passed": true,
+      "metric": 0.000976562
+    }
   ],
-  "passed": 10,
+  "passed": 14,
   "failed": 0
 }

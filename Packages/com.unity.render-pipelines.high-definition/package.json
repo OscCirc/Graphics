@@ -23,6 +23,14 @@
   ],
   "samples": [
     {
+      "displayName": "Experimental Shared Oct Probe HDRP Integration",
+      "description": "Opt-in adapter for shared Oct captures to HDRP's existing reflection atlas and Lit shading. Requires GGX-only filtering and Custom reflection probes.",
+      "path": "Samples~/SharedOctahedralProbeHDRPIntegration",
+      "dependencies": [
+        "com.unity.render-pipelines.high-definition/Samples~/SharedOctahedralProbe"
+      ]
+    },
+    {
       "displayName": "Experimental Shared Octahedral Probe Atlas",
       "description": "Sequential shared-capture and single-face-to-Oct reflection probe prototype, with GGX prefiltering and explicit atlas sampling. Does not replace the built-in probe scheduler.",
       "path": "Samples~/SharedOctahedralProbe"

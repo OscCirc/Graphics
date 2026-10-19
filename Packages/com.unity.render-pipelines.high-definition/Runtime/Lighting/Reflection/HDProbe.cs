@@ -335,6 +335,8 @@ namespace UnityEngine.Rendering.HighDefinition
 
         internal uint GetTextureHash()
         {
+            if (usesExternalOctahedralCapture)
+                return externalOctahedralVersion;
             uint textureHash = (mode == ProbeSettings.Mode.Realtime) ? m_RealtimeRenderCount : texture.updateCount;
             // For baked probes in the editor we need to factor in the actual hash of texture because we can't increment the render count of a texture that's baked on the disk.
 #if UNITY_EDITOR
@@ -365,6 +367,8 @@ namespace UnityEngine.Rendering.HighDefinition
 
         internal bool HasValidRenderedData()
         {
+            if (usesExternalOctahedralCapture)
+                return hasExternalOctahedralData;
             bool hasValidTexture = texture != null;
             if (mode != ProbeSettings.Mode.Realtime)
             {
@@ -680,6 +684,8 @@ namespace UnityEngine.Rendering.HighDefinition
             get => m_ProbeSettings.mode;
             set
             {
+                if (m_ProbeSettings.mode != value)
+                    DisableExternalOctahedralCapture();
                 m_ProbeSettings.mode = value;
 
 #if UNITY_EDITOR
@@ -924,7 +930,8 @@ namespace UnityEngine.Rendering.HighDefinition
         {
 
             var hdrp = (HDRenderPipeline)RenderPipelineManager.currentPipeline;
-            var hasValidSHData = m_HasValidSHForNormalization && hdrp.asset.currentPlatformRenderPipelineSettings.supportProbeVolume;
+            // External providers do not supply matching normalization SH. Do not reuse stale baked coefficients.
+            var hasValidSHData = !usesExternalOctahedralCapture && m_HasValidSHForNormalization && hdrp.asset.currentPlatformRenderPipelineSettings.supportProbeVolume;
 
             if (!hasValidSHData)
             {

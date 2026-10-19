@@ -37,7 +37,7 @@ if (-not $process.WaitForExit(600000)) {
 }
 $process.Refresh()
 if ($process.ExitCode -ne 0) {
-    Get-Content -LiteralPath $logPath -Tail 85
+    # Keep full licensing/machine diagnostics local rather than dumping the Editor log into a public CI console.
     throw "GPU tests failed with exit code $($process.ExitCode). See $logPath"
 }
 Get-Content -LiteralPath (Join-Path $resultsRoot 'results.json')

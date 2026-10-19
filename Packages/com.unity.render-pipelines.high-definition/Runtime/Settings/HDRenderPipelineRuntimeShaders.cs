@@ -1008,6 +1008,16 @@ namespace UnityEngine.Rendering.HighDefinition
             set => this.SetValueAndNotify(ref m_BlitCubeTextureFacePS, value);
         }
 
+        [SerializeField, ResourcePath("Runtime/ShaderLibrary/BlitPrefilteredOctahedralProbe.shader")]
+        private Shader m_BlitPrefilteredOctahedralProbePS;
+
+        /// <summary>Copies external prefiltered Oct data into the reflection probe atlas.</summary>
+        public Shader blitPrefilteredOctahedralProbePS
+        {
+            get => m_BlitPrefilteredOctahedralProbePS;
+            set => this.SetValueAndNotify(ref m_BlitPrefilteredOctahedralProbePS, value);
+        }
+
         [SerializeField, ResourcePath("Runtime/Core/CoreResources/ClearUIntTextureArray.compute")]
         private ComputeShader m_ClearUIntTextureCS;
 

@@ -34,6 +34,9 @@ namespace UnityEngine.Rendering.HighDefinition
 
         Material m_ConvertTextureMaterial;
         MaterialPropertyBlock m_ConvertTexturePropertyBlock = new MaterialPropertyBlock();
+        Shader m_PrefilteredOctahedralShader;
+        Material m_PrefilteredOctahedralMaterial;
+        MaterialPropertyBlock m_PrefilteredOctahedralProperties = new MaterialPropertyBlock();
 
         uint m_CurrentRender;
 
@@ -102,6 +105,7 @@ namespace UnityEngine.Rendering.HighDefinition
 
             m_DecreaseResToFit = decreaseResToFit;
             m_ConvertTextureMaterial = CoreUtils.CreateEngineMaterial(renderPipeline.runtimeShaders.blitCubeTextureFacePS);
+            m_PrefilteredOctahedralShader = renderPipeline.runtimeShaders.blitPrefilteredOctahedralProbePS;
         }
 
         private static TextureId GetTextureID(HDProbe probe)
@@ -112,14 +116,16 @@ namespace UnityEngine.Rendering.HighDefinition
         private static TextureId GetTextureIDAndSize(HDProbe probe, out int textureSize)
         {
             textureSize = GetTextureSizeInAtlas(probe);
-            TextureId textureId = new TextureId(probe.texture.GetEntityId(),  textureSize);
+            TextureId textureId = probe.usesExternalOctahedralCapture
+                ? new TextureId(probe.GetEntityId(), textureSize)
+                : new TextureId(probe.texture.GetEntityId(), textureSize);
 
             return textureId;
         }
 
         private static int GetTextureSizeInAtlas(HDProbe probe)
         {
-            int textureSize = probe.texture.width;
+            int textureSize = probe.usesExternalOctahedralCapture ? (int)probe.cubeResolution : probe.texture.width;
 
             switch (probe.type)
             {
@@ -516,6 +522,51 @@ namespace UnityEngine.Rendering.HighDefinition
             }
         }
 
+        // The source is consumed only by this explicit upload, never by a later cache miss.
+        // It can therefore be a shared one-tile workspace overwritten by the next capture.
+        internal bool UploadExternalOctahedralProbe(CommandBuffer cmd, HDProbe probe, Texture source,
+            OctahedralProbeSourceLayout layout, uint version)
+        {
+            if (!probe.usesExternalOctahedralCapture)
+                throw new InvalidOperationException("Enable external Oct capture before uploading a probe.");
+            if (m_IBLFiltersBSDF.Length != 1)
+                throw new NotSupportedException("External Oct uploads currently require GGX-only reflection filtering. Disable Fabric Convolution.");
+            if (m_PrefilteredOctahedralShader == null)
+                throw new InvalidOperationException("The prefiltered Oct upload shader resource is missing.");
+            if (m_PrefilteredOctahedralMaterial == null)
+                m_PrefilteredOctahedralMaterial = CoreUtils.CreateEngineMaterial(m_PrefilteredOctahedralShader);
+
+            TextureId textureId = GetTextureIDAndSize(probe, out int textureSize);
+            if (!m_Atlas.IsCached(out Vector4 scaleOffset, textureId) && !TryAllocateTexture(textureId, textureSize, ref scaleOffset))
+                return false;
+
+            var sourceRegion = new Vector4((float)layout.tileSize / layout.atlasSize, (float)layout.tileSize / layout.atlasSize,
+                (float)layout.offsetX / layout.atlasSize, (float)layout.offsetY / layout.atlasSize);
+            m_PrefilteredOctahedralProperties.SetTexture("_OctProbeSource", source);
+            m_PrefilteredOctahedralProperties.SetVector("_OctProbeSourceRegion", sourceRegion);
+            m_PrefilteredOctahedralProperties.SetVector("_OctProbeSourceParameters",
+                new Vector4(layout.atlasSize, layout.maxMip, (int)EnvConstants.ConvolutionMipCount - 1, 0));
+            m_PrefilteredOctahedralProperties.SetVector("_BlitScaleBiasRt", scaleOffset);
+            m_PrefilteredOctahedralProperties.SetVector("_BlitScaleBias", new Vector4(1, 1, 0, 0));
+
+            int texelPadding = m_CubeTexelPadding;
+            int width = Mathf.CeilToInt(scaleOffset.x * m_AtlasWidth);
+            int height = Mathf.CeilToInt(scaleOffset.y * m_AtlasHeight);
+            Vector2 interior = GetTextureSizeWithoutPadding(width, height, texelPadding);
+            m_PrefilteredOctahedralProperties.SetVector("_BlitTextureSize", new Vector4(interior.x, interior.y, 0, 0));
+            for (int mip = 0; mip < m_AtlasMipCount; ++mip)
+            {
+                if (mip > m_CubeMipPadding) texelPadding *= 2;
+                m_PrefilteredOctahedralProperties.SetInt("_BlitPaddingSize", texelPadding);
+                m_PrefilteredOctahedralProperties.SetFloat("_BlitMipLevel", mip);
+                cmd.SetRenderTarget(m_AtlasTexture, mip, CubemapFace.Unknown, 0);
+                cmd.DrawProcedural(Matrix4x4.identity, m_PrefilteredOctahedralMaterial, 0, MeshTopology.Quads, 4, 1, m_PrefilteredOctahedralProperties);
+            }
+
+            m_TextureLRUAndHash[textureId] = (m_CurrentRender, version);
+            return true;
+        }
+
         private bool UpdateTexture(CommandBuffer cmd, HDProbe probe, ref IBLFilterBSDF.PlanarTextureFilteringParameters planarTextureFilteringParameters, ref Vector4 scaleOffset)
         {
             using (new ProfilingScope(cmd, ProfilingSampler.Get(HDProfileId.UpdateReflectionProbeAtlas)))
@@ -575,6 +626,8 @@ namespace UnityEngine.Rendering.HighDefinition
             m_TextureLRUAndHash = null;
 
             m_ConvertTextureMaterial = null;
+            CoreUtils.Destroy(m_PrefilteredOctahedralMaterial);
+            m_PrefilteredOctahedralMaterial = null;
 
             m_ConvolvedPlanarReflectionTexture?.Release();
             if (m_TempConvertedReflectionProbeTexture != null)
@@ -593,6 +646,20 @@ namespace UnityEngine.Rendering.HighDefinition
 
         public Vector4 FetchCubeReflectionProbe(CommandBuffer cmd, HDProbe probe, out int fetchIndex)
         {
+            if (probe.usesExternalOctahedralCapture)
+            {
+                fetchIndex = m_CubeFrameFetchIndex++;
+                TextureId externalId = GetTextureID(probe);
+                if (probe.hasExternalOctahedralData && m_Atlas.IsCached(out Vector4 externalRegion, externalId) &&
+                    m_TextureLRUAndHash.TryGetValue(externalId, out var externalEntry) && externalEntry.Item2 == probe.externalOctahedralVersion)
+                {
+                    m_TextureLRUAndHash[externalId] = (m_CurrentRender, externalEntry.Item2);
+                    return externalRegion;
+                }
+                // The shared source now belongs to some other probe. Request a recapture, do not read it.
+                probe.RequestExternalOctahedralCapture();
+                return Vector4.zero;
+            }
             Texture texture = probe.texture;
             Assert.IsTrue(texture.width == texture.height);
             Assert.IsTrue(texture.dimension == TextureDimension.Cube);
@@ -635,9 +702,12 @@ namespace UnityEngine.Rendering.HighDefinition
 
         public void ReserveReflectionProbeSlot(HDProbe probe)
         {
-            Texture texture = probe.texture;
-            Assert.IsTrue(texture.width == texture.height, "Reflection probe should be a square texture. Check the import settings of the texture, or your Texture Importer presets");
-            Assert.IsTrue(texture.dimension == TextureDimension.Tex2D || texture.dimension == TextureDimension.Cube, "Reflection probe should be a 2D or Cube texture. Check the import settings of the texture, or your Texture Importer presets");
+            if (!probe.usesExternalOctahedralCapture)
+            {
+                Texture texture = probe.texture;
+                Assert.IsTrue(texture.width == texture.height, "Reflection probe should be a square texture. Check the import settings of the texture, or your Texture Importer presets");
+                Assert.IsTrue(texture.dimension == TextureDimension.Tex2D || texture.dimension == TextureDimension.Cube, "Reflection probe should be a 2D or Cube texture. Check the import settings of the texture, or your Texture Importer presets");
+            }
 
             TextureId textureId = GetTextureIDAndSize(probe, out int textureSize);
 

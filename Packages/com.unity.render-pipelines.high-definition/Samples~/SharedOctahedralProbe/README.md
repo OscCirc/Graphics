@@ -2,7 +2,7 @@
 
 This sample implements two explicitly scheduled reflection-capture pipelines. Both keep the published results in an Oct atlas keyed by **probe ID**, rather than retaining a Cubemap for every probe.
 
-It is an opt-in research sample. Import it from HDRP's Package Manager Samples list. It does **not** change HDRP's built-in `HDProbe`, probe culling, or Lit reflection-probe sampling. Its atlas is consumed through the supplied `SampleSharedOctProbe` HLSL function. HDRP 17.6 is the reference source; the standalone runtime API also compiles against Tuanjie 2022.3.
+It is an opt-in research sample. Import it from HDRP's Package Manager Samples list. On its own it uses the supplied `SampleSharedOctProbe` HLSL function and does not replace built-in probe shading. The optional [HDRP integration sample](../SharedOctahedralProbeHDRPIntegration/README.md) uploads each result into the built-in atlas and retains Lit shading. HDRP 17.6 is the reference source; the standalone runtime API also compiles against Tuanjie 2022.3.
 
 ## Pipelines
 
@@ -38,6 +38,8 @@ The single-face path never allocates a Cubemap. Raw Oct and the 2D face are shar
 4. `SharedOctahedralProbeExample.cs`: optional component, one probe per frame or one face per frame. Assign a disabled source Camera, the compute asset, and probe transforms. The component owns its working camera and does not alter the supplied camera.
 
 The example accepts probe **transforms**, not `ReflectionProbe` components, so importing it does not silently enable or disable the existing HDRP probe system. Avoid running the stock realtime capture as well when evaluating workspace memory.
+
+`useSingleTileWorkspace` lets a `probeUpdated` subscriber consume a completed tile synchronously before the example removes its mapping and reuses it. The HDRP bridge enables this mode, so its intermediate prefiltered Oct texture has one tile regardless of probe count. Standalone users normally keep this option disabled.
 
 ## Minimal API
 
@@ -105,16 +107,10 @@ The single-face camera target additionally requests a shared 24-bit depth buffer
 
 See [the validation tools](../../../../Tools/OctahedralProbe/README.md) and their checked-in report. Tests cover HDR preservation, tile isolation, actual Oct borders, six-face reprojection, roughness filtering, fractional LOD, cancellation, versions and cleanup. Editor camera/lifecycle tests require a valid Editor license; native D3D11 tests execute the exact compute source without the Editor.
 
-## Integrating into HDRP's built-in probe path
+## Integration with built-in HDRP probes
 
-Do not just assign the shared texture to every `probe.texture`: the current cache key uses the texture's entity ID, and the scheduler queues multiple captures before consuming them.
+Do not assign the shared texture to every `probe.texture`: ordinary cache identity is based on texture identity and captures can be queued before consumption. The optional bridge instead enables an explicit runtime-only external provider on Custom reflection probes and uploads each completed tile before workspace reuse.
 
-The next integration patch must jointly change:
+The repository now includes `HDProbe.EnableExternalOctahedralCapture`, `HDRenderPipeline.UploadExternalOctahedralProbe`, a stable per-probe cache key, cache-miss recapture requests, and an upload shader that converts this sample's border/mip contract to HDRP's existing contract. It also preserves the frozen capture position for parallax correction. Standard probe behavior is unchanged until the API is explicitly enabled.
 
-1. `HDProbe.AllocTexture` and `AddHDProbeRenderRequests`: acquire a workspace per in-flight capture and schedule filtering/atlas publication **before** workspace reuse; support time slicing and capture dependencies.
-2. `ReflectionProbeTextureCache.GetTextureIDAndSize`: key residency by stable probe identity/configuration, with a separate content version.
-3. `HasValidRenderedData`, `TrivialRejectProbe` and cache misses: valid atlas data must not require a persistent source Cubemap; eviction must request a recapture or reload.
-4. Atlas coordinates and mip borders: either keep HDRP's existing border contract when generating output, or switch its sampling helper together with the writer. Do not plug this sample's layout into `SampleEnv` unchanged.
-5. Keep capture render data, proxy correction, FGD and influence weights in the existing light loop.
-
-The sample supplies a validated capture/reprojection/filtering core, not that scheduler integration. Standard HDRP rendering remains unchanged until those points are explicitly connected and tested with a matching Editor.
+See the [integration instructions and validation boundary](../SharedOctahedralProbeHDRPIntegration/README.md). Full HDRP package compilation and scene rendering have not been executed on this machine; they need a compatible, activated Editor. The native GPU tests validate the actual upload helper, not the complete Unity render pipeline.

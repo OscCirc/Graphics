@@ -74,10 +74,10 @@ public:
     ComPtr<ID3D11Device> device;
     ComPtr<ID3D11DeviceContext> context;
     ComPtr<ID3D11SamplerState> sampler;
-    Kernel cube, face, oct, sample;
+    Kernel cube, face, oct, sample, importer;
     std::string adapter;
 
-    explicit GPU(const wchar_t* path)
+    explicit GPU(const wchar_t* path, const wchar_t* importPath)
     {
         D3D_FEATURE_LEVEL level;
         check(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_HARDWARE,nullptr,0,nullptr,0,D3D11_SDK_VERSION,&device,&level,&context));
@@ -90,6 +90,7 @@ public:
         s.AddressU=s.AddressV=s.AddressW=D3D11_TEXTURE_ADDRESS_CLAMP; s.MaxLOD=D3D11_FLOAT32_MAX;
         check(device->CreateSamplerState(&s,&sampler));
         compile(cube,path,"FilterCube"); compile(face,path,"CopyFace"); compile(oct,path,"FilterOct"); compile(sample,path,"SampleAtlas");
+        compile(importer,importPath,"ImportOctProbe");
     }
 
     void compile(Kernel& k,const wchar_t* path,const char* entry)
@@ -180,6 +181,51 @@ public:
         bind(face,"_FaceTexture",source.srv.Get()); bindUAV(face,"_Output",raw.uavs[0].Get()); dispatch(face,8,8);
     }
 
+    void importProbe(Texture& source, Texture& destination, int sourceSlot, int destinationSlot)
+    {
+        auto& k=importer;
+        float scale=64.f/source.size;
+        std::array<float,4> region={scale,scale,(sourceSlot%(source.size/64))*scale,(sourceSlot/(source.size/64))*scale};
+        set(k,"_SourceRegion",region);set(k,"_SourceSize",float(source.size));set(k,"_SourceMaxMip",4.f);set(k,"_DestinationMaxMip",6.f);
+        int padding=16;
+        for(int mip=0;mip<=6;++mip){
+            int size=256>>mip;
+            if(mip>3)padding*=2;
+            set(k,"_TileSize",size);set(k,"_BaseInterior",240.f);set(k,"_Padding",float(padding));set(k,"_Mip",float(mip));
+            std::array<int,2> origin={destinationSlot%(destination.size/256)*size,destinationSlot/(destination.size/256)*size};set(k,"_Origin",origin);
+            bind(k,"_Source",source.srv.Get());bindUAV(k,"_Output",destination.uavs[mip].Get());dispatch(k,(size+7)/8,(size+7)/8);
+        }
+    }
+
+    double benchmark(const std::function<void()>& work, int iterations=20)
+    {
+        // Record first so CPU reflection/parameter-building work does not starve the timed GPU batch.
+        ComPtr<ID3D11DeviceContext> immediate=context, deferred;
+        check(device->CreateDeferredContext(0,&deferred));
+        ComPtr<ID3D11CommandList> commands;
+        context=deferred;
+        try { work(); check(context->FinishCommandList(FALSE,&commands)); }
+        catch (...) { context=immediate; throw; }
+        context=immediate;
+        D3D11_QUERY_DESC d={D3D11_QUERY_TIMESTAMP_DISJOINT,0};
+        ComPtr<ID3D11Query> disjoint,begin,end;
+        check(device->CreateQuery(&d,&disjoint)); d.Query=D3D11_QUERY_TIMESTAMP;
+        check(device->CreateQuery(&d,&begin));check(device->CreateQuery(&d,&end));
+        for(int i=0;i<3;++i)context->ExecuteCommandList(commands.Get(),FALSE);
+        context->Begin(disjoint.Get());context->End(begin.Get());
+        for(int i=0;i<iterations;++i)context->ExecuteCommandList(commands.Get(),FALSE);
+        context->End(end.Get());context->End(disjoint.Get());context->Flush();
+        auto wait=[&](ID3D11Query* query,void* data,UINT bytes){
+            ULONGLONG deadline=GetTickCount64()+10000;
+            for(;;){HRESULT result=context->GetData(query,data,bytes,0);check(result);if(result==S_OK)return;
+                require(GetTickCount64()<deadline,"GPU timestamp readback timed out");Sleep(1);}
+        };
+        D3D11_QUERY_DATA_TIMESTAMP_DISJOINT frequency={};UINT64 a=0,b=0;
+        wait(disjoint.Get(),&frequency,sizeof(frequency));wait(begin.Get(),&a,sizeof(a));wait(end.Get(),&b,sizeof(b));
+        require(!frequency.Disjoint&&frequency.Frequency>0,"GPU timestamps were disjoint");
+        return double(b-a)/frequency.Frequency*1000/iterations;
+    }
+
     std::vector<Color> read(Texture& t,int mip)
     {
         D3D11_TEXTURE2D_DESC d={}; t.texture->GetDesc(&d);
@@ -237,15 +283,30 @@ static void ppm(const fs::path& path,const std::vector<Color>& pixels,int size)
     }
 }
 
+static Color bilinear(const std::vector<Color>& image,int size,float u,float v)
+{
+    float x=u*size-.5f,y=v*size-.5f;int x0=(int)std::floor(x),y0=(int)std::floor(y);float tx=x-x0,ty=y-y0;
+    auto at=[&](int a,int b){return image[std::clamp(b,0,size-1)*size+std::clamp(a,0,size-1)];};
+    auto lerp=[](Color a,Color b,float t){return Color{a.r+(b.r-a.r)*t,a.g+(b.g-a.g)*t,a.b+(b.b-a.b)*t};};
+    return lerp(lerp(at(x0,y0),at(x0+1,y0),tx),lerp(at(x0,y0+1),at(x0+1,y0+1),tx),ty);
+}
+
+static std::array<float,2> repeatUV(float u,float v)
+{
+    if(u<0)return v<0?std::array<float,2>{1+u,1+v}:(v<1?std::array<float,2>{-u,1-v}:std::array<float,2>{1+u,v-1});
+    if(u<1)return v<0?std::array<float,2>{1-u,-v}:(v<1?std::array<float,2>{u,v}:std::array<float,2>{1-u,2-v});
+    return v<0?std::array<float,2>{u-1,1+v}:(v<1?std::array<float,2>{2-u,1-v}:std::array<float,2>{u-1,v-1});
+}
+
 int wmain(int argc,wchar_t** argv)
 {
-    if(argc!=3){ std::cerr<<"Usage: NativeGpuTests shader.compute outputDirectory\n"; return 2; }
+    if(argc!=4){ std::cerr<<"Usage: NativeGpuTests shader.compute outputDirectory import.compute\n"; return 2; }
     fs::path output=argv[2]; fs::create_directories(output);
     std::ofstream report(output/"native-results.json");
     int passed=0,failed=0;
     try {
-        GPU gpu(argv[1]); std::cout<<"GPU: "<<gpu.adapter<<"\n";
-        report<<"{\n  \"backend\": \"D3D11 hardware, RGBAHalf, original sample HLSL\",\n  \"gpu\": \""<<gpu.adapter<<"\",\n  \"cases\": [\n";
+        GPU gpu(argv[1],argv[3]); std::cout<<"GPU: "<<gpu.adapter<<"\n";
+        report<<"{\n  \"backend\": \"D3D11 hardware, RGBAHalf, original sample and production upload HLSL\",\n  \"gpu\": \""<<gpu.adapter<<"\",\n  \"cases\": [\n";
         auto test=[&](const char* name,const std::function<float()>& body) {
             if(passed+failed) report<<",\n";
             try { float metric=body(); ++passed; std::cout<<"PASS "<<name<<" (metric="<<metric<<")\n"; report<<"    {\"name\":\""<<name<<"\",\"passed\":true,\"metric\":"<<metric<<"}"; }
@@ -294,6 +355,48 @@ int wmain(int argc,wchar_t** argv)
             for(int y=0;y<64;++y)for(int x=0;x<64;++x){V3 d=pixelDirection(x,y);bool owns=d.x>=0&&std::abs(d.x)>=std::abs(d.y)&&std::abs(d.x)>=std::abs(d.z);if(!owns)e=std::max(e,error(before[y*64+x],after[y*64+x]));else ++changed;}
             require(e<.001f&&changed>100,"CopyFace overwrote another region");return e;
         });
+        auto imported=gpu.make(512,10);
+        test("production Oct import helper compiles",[]{return 0.f;});
+        test("production import consumes a shared source before it is reused",[&]{
+            for(int f=0;f<6;++f)gpu.uploadFace(cube,f,[](V3){return Color{2,0,0};});gpu.filter(cube,reference,0,false);gpu.importProbe(reference,imported,0,0);
+            for(int f=0;f<6;++f)gpu.uploadFace(cube,f,[](V3){return Color{0,1,0};});gpu.filter(cube,reference,0,false);gpu.importProbe(reference,imported,0,1);
+            float e=0;for(int mip=0;mip<=6;++mip){auto p=gpu.read(imported,mip);int width=512>>mip,tile=256>>mip;
+                e=std::max({e,error(p[(tile/2)*width+tile/2],{2,0,0}),error(p[(tile/2)*width+tile+tile/2],{0,1,0})});}
+            require(e<.005f,"Shared import source overwrote another probe");return e;
+        });
+        test("production import converts border layout and roughness mip range",[&]{
+            for(int f=0;f<6;++f)gpu.uploadFace(cube,f,gradient);gpu.filter(cube,reference,0,false);gpu.importProbe(reference,imported,0,0);
+            std::vector<std::vector<Color>> source;for(int mip=0;mip<=4;++mip)source.push_back(gpu.read(reference,mip));
+            float e=0;int padding=16;
+            for(int mip=0;mip<=6;++mip){if(mip>3)padding*=2;int tile=256>>mip,atlasSize=512>>mip;auto p=gpu.read(imported,mip);
+                float lod=mip/6.f*4;int lo=(int)std::floor(lod),hi=std::min(lo+1,4);float fraction=lod-lo;
+                for(int y=0;y<tile;++y)for(int x=0;x<tile;++x){auto uv=repeatUV(((x+.5f)/tile*(240+padding)-padding*.5f)/240,((y+.5f)/tile*(240+padding)-padding*.5f)/240);
+                    auto sample=[&](int level){float size=float(64>>level);return bilinear(source[level],int(size),(uv[0]*(size-2)+1)/size,(uv[1]*(size-2)+1)/size);};
+                    Color a=sample(lo),b=sample(hi),expected={a.r+(b.r-a.r)*fraction,a.g+(b.g-a.g)*fraction,a.b+(b.b-a.b)*fraction};e=std::max(e,error(p[y*atlasSize+x],expected));}
+            }require(e<.004f,"Production border/LOD import mismatch: "+std::to_string(e));return e;
+        });
+        test("production import selects the requested source tile",[&]{
+            for(int f=0;f<6;++f)gpu.uploadFace(cube,f,[](V3){return Color{0,0,2};});gpu.filter(cube,atlas,1,false);gpu.importProbe(atlas,imported,1,0);
+            float e=0;for(int mip=0;mip<=6;++mip){auto p=gpu.read(imported,mip);int tile=256>>mip,width=512>>mip;
+                for(int y=0;y<tile;++y)for(int x=0;x<tile;++x)e=std::max(e,error(p[y*width+x],{0,0,2}));}
+            require(e<.005f,"Wrong source atlas region");return e;
+        });
+        // Microbenchmark only: source preparation and all Camera/Unity/Lit work are excluded.
+        try {
+            std::vector<Texture> faceFixtures;
+            for(int f=0;f<6;++f){faceFixtures.push_back(gpu.make(64,1,1,false));gpu.uploadFace(faceFixtures.back(),f,gradient);gpu.uploadFace(cube,f,gradient);}
+            double cubeMs=gpu.benchmark([&]{gpu.filter(cube,reference,0,false);});
+            double faceMs=gpu.benchmark([&]{for(int f=0;f<6;++f)gpu.copyFace(faceFixtures[f],raw,f);gpu.filter(raw,progressive,0,true);});
+            std::ofstream performance(output/"microbenchmark.json");
+            performance<<"{\n  \"scope\":\"GPU timestamp microbenchmark; excludes camera capture, uploads, Unity scheduling and Lit\",\n"
+                <<"  \"gpu\":\""<<gpu.adapter<<"\",\n  \"faceSize\":64,\n  \"tileSize\":64,\n  \"ggxSamples\":256,\n  \"roughnessLevels\":5,\n  \"iterations\":20,\n"
+                <<"  \"sharedCubePrefilterMs\":"<<cubeMs<<",\n  \"sixFacesReprojectAndOctPrefilterMs\":"<<faceMs<<"\n}\n";
+            std::cout<<"GPU microbenchmark (capture excluded): cube="<<cubeMs<<" ms, six faces + Oct="<<faceMs<<" ms\n";
+        } catch(const std::exception& e) {
+            // Optional timestamps (e.g. a disjoint GPU clock) must not turn correctness passes into failures.
+            std::cout<<"Microbenchmark unavailable: "<<e.what()<<"\n";
+            std::ofstream(output/"microbenchmark.json")<<"{\"available\":false}\n";
+        }
         report<<"\n  ],\n  \"passed\": "<<passed<<",\n  \"failed\": "<<failed<<"\n}\n";
         std::cout<<passed<<" passed, "<<failed<<" failed\n";return failed?1:0;
     } catch(const std::exception& e){std::cerr<<e.what()<<"\n";return 2;}

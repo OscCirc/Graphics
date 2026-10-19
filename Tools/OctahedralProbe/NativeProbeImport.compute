@@ -1,0 +1,20 @@
+#pragma kernel ImportOctProbe
+#include "../../Packages/com.unity.render-pipelines.high-definition/Runtime/Lighting/Reflection/OctahedralProbeSource.hlsl"
+
+Texture2D<float4> _Source;
+SamplerState sampler_LinearClamp;
+RWTexture2D<float4> _Output;
+int _TileSize;
+int2 _Origin;
+float _BaseInterior, _Padding, _Mip, _SourceSize, _SourceMaxMip, _DestinationMaxMip;
+float4 _SourceRegion;
+
+[numthreads(8, 8, 1)]
+void ImportOctProbe(uint3 id : SV_DispatchThreadID)
+{
+    if (any(id.xy >= (uint)_TileSize)) return;
+    // Algebraically identical to the production VertQuadPadding vertex shader at pixel centers.
+    float2 uv = ((float2(id.xy) + 0.5) / _TileSize * (_BaseInterior + _Padding) - 0.5 * _Padding) / _BaseInterior;
+    _Output[_Origin + id.xy] = float4(SampleOctahedralProbeSource(_Source, sampler_LinearClamp,
+        uv, _SourceRegion, _SourceSize, _SourceMaxMip, _Mip, _DestinationMaxMip), 1);
+}
