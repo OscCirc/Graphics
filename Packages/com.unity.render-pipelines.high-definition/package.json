@@ -23,6 +23,11 @@
   ],
   "samples": [
     {
+      "displayName": "Experimental Shared Octahedral Probe Atlas",
+      "description": "Sequential shared-capture and single-face-to-Oct reflection probe prototype, with GGX prefiltering and explicit atlas sampling. Does not replace the built-in probe scheduler.",
+      "path": "Samples~/SharedOctahedralProbe"
+    },
+    {
       "displayName": "Additional Post-processing Data",
       "description": "Adds additional post-processing data to your project, such as Lens Dirt textures.",
       "path": "Samples~/PostProcessingData"

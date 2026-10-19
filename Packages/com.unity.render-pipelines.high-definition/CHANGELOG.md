@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added
+- Added an experimental shared-capture Octahedral Probe Atlas sample with per-face reprojection, GGX prefiltering, and standalone GPU validation tools.
+
 Version Updated
 The version number for this package has increased due to a version update of a related graphics package.
 
