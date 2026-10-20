@@ -369,7 +369,8 @@ namespace UnityEngine.Rendering.HighDefinition
         {
             if (usesExternalOctahedralCapture)
                 return hasExternalOctahedralData;
-            bool hasValidTexture = texture != null;
+            bool hasValidTexture = texture != null && (type != ProbeSettings.ProbeType.ReflectionProbe ||
+                texture.dimension == TextureDimension.Cube || IsValidRawOctTexture(texture));
             if (mode != ProbeSettings.Mode.Realtime)
             {
                 return hasValidTexture;
@@ -473,6 +474,11 @@ namespace UnityEngine.Rendering.HighDefinition
             switch (type)
             {
                 case ProbeSettings.ProbeType.ReflectionProbe:
+                    if (usesOctahedralRealtime)
+                    {
+                        AllocateOctahedralCapture(probeFormat);
+                        break;
+                    }
                     int desiredProbeSize = (int)cubeResolution;
 
                     var desiredProbeFormat = ((HDRenderPipeline)RenderPipelineManager.currentPipeline).currentPlatformRenderPipelineSettings.lightLoopSettings.reflectionProbeFormat;
@@ -685,7 +691,12 @@ namespace UnityEngine.Rendering.HighDefinition
             set
             {
                 if (m_ProbeSettings.mode != value)
+                {
                     DisableExternalOctahedralCapture();
+                    ReleaseOctahedralCapture();
+                    m_RemainingRenderSteps = ProbeRenderSteps.None;
+                    m_HasPendingRenderRequest = false;
+                }
                 m_ProbeSettings.mode = value;
 
 #if UNITY_EDITOR
@@ -1122,6 +1133,12 @@ namespace UnityEngine.Rendering.HighDefinition
         void OnEnable()
         {
             wasRenderedAfterOnEnable = false;
+            if (usesOctahedralRealtime)
+            {
+                ReleaseOctahedralCapture();
+                m_RemainingRenderSteps = ProbeRenderSteps.None;
+                m_HasPendingRenderRequest = false;
+            }
             PrepareCulling();
             HDProbeSystem.RegisterProbe(this);
             UpdateProbeName();
@@ -1142,6 +1159,15 @@ namespace UnityEngine.Rendering.HighDefinition
         void OnDisable()
         {
             HDProbeSystem.UnregisterProbe(this);
+            bool hadPendingOctCapture = m_PendingOctahedralRadiance != null || HasRemainingRenderSteps();
+            ReleaseOctahedralCapture();
+            if (usesOctahedralRealtime)
+            {
+                // Retain the published result like the Cube path, including OnDemand re-enable.
+                m_RemainingRenderSteps = ProbeRenderSteps.None;
+                m_HasPendingRenderRequest = false;
+                if (hadPendingOctCapture) RequestRenderNextUpdate();
+            }
 #if UNITY_EDITOR
             UnityEditor.Lightmapping.lightingDataCleared -= ClearSHBaking;
             DequeueSHRequest();
@@ -1166,6 +1192,24 @@ namespace UnityEngine.Rendering.HighDefinition
 
         void OnValidate()
         {
+            if (type == ProbeSettings.ProbeType.ReflectionProbe)
+            {
+                bool hadPendingOctCapture = m_PendingOctahedralRadiance != null || HasRemainingRenderSteps();
+                ReleaseOctahedralCapture();
+                if (m_RealtimeTexture != null &&
+                    (m_RealtimeTexture.rt.dimension == TextureDimension.Tex2D) != m_UseOctahedralRadiance)
+                {
+                    m_RealtimeTexture.Release();
+                    m_RealtimeTexture = null;
+                    m_RealtimeRenderCount = 0;
+                }
+                if (usesOctahedralRealtime)
+                {
+                    m_RemainingRenderSteps = ProbeRenderSteps.None;
+                    m_HasPendingRenderRequest = false;
+                    if (hadPendingOctCapture) RequestRenderNextUpdate();
+                }
+            }
             HDProbeSystem.UnregisterProbe(this);
 
             SetOrReleaseCustomTextureReference();
@@ -1182,11 +1226,12 @@ namespace UnityEngine.Rendering.HighDefinition
             }
         }
 
-        void OnDestroy()
+#endif
+        protected virtual void OnDestroy()
         {
+            ReleaseOctahedralCapture();
             m_RealtimeTexture?.Release();
             m_RealtimeDepthBuffer?.Release();
         }
-#endif
     }
 }

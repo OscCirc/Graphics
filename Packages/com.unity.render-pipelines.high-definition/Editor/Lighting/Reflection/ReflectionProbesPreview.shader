@@ -3,6 +3,9 @@ Shader "Hidden/Debug/ReflectionProbePreview"
     Properties
     {
         _Cubemap("_Cubemap", Cube) = "white" {}
+        _Octahedral("Raw Oct", 2D) = "white" {}
+        _IsOctahedral("Is Oct", Float) = 0
+        _OctahedralSize("Oct Size", Float) = 1
         _CameraWorldPosition("_CameraWorldPosition", Vector) = (1,1,1,1)
         _MipLevel("_MipLevel", Range(0.0,7.0)) = 0.0
         _Exposure("_Exposure", Range(-10.0,10.0)) = 0.0
@@ -29,6 +32,7 @@ Shader "Hidden/Debug/ReflectionProbePreview"
             #pragma fragment frag
 
             #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
+            #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Packing.hlsl"
             #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/EntityLighting.hlsl"
             #include "Packages/com.unity.render-pipelines.high-definition/Runtime/ShaderLibrary/ShaderVariables.hlsl"
 
@@ -45,6 +49,9 @@ Shader "Hidden/Debug/ReflectionProbePreview"
                 float3 positionWS : TEXCOORD0;
             };
 
+            TEXTURE2D(_Octahedral);
+            SAMPLER(sampler_Octahedral);
+            float _IsOctahedral, _OctahedralSize;
             TEXTURECUBE(_Cubemap);
             SAMPLER(sampler_Cubemap);
             float4 _Cubemap_HDR;
@@ -68,8 +75,17 @@ Shader "Hidden/Debug/ReflectionProbePreview"
             {
                 float3 V = normalize(i.positionWS - GetPrimaryCameraPosition());
                 float3 R = reflect(V, normalize(i.normalWS));
-                float4 color = SAMPLE_TEXTURECUBE_LOD(_Cubemap, sampler_Cubemap, R, _MipLevel).rgba;
-                color.rgb = DecodeHDREnvironment(color, _Cubemap_HDR);
+                float4 color;
+                if (_IsOctahedral > 0.5)
+                {
+                    float2 uv = (PackNormalOctQuadEncode(R) * 0.5 + 0.5) * ((_OctahedralSize - 2) / _OctahedralSize) + 1 / _OctahedralSize;
+                    color = SAMPLE_TEXTURE2D_LOD(_Octahedral, sampler_Octahedral, uv, 0);
+                }
+                else
+                {
+                    color = SAMPLE_TEXTURECUBE_LOD(_Cubemap, sampler_Cubemap, R, _MipLevel).rgba;
+                    color.rgb = DecodeHDREnvironment(color, _Cubemap_HDR);
+                }
                 color = color * exp2(_Exposure) * GetCurrentExposureMultiplier();
 
                 return float4(color);

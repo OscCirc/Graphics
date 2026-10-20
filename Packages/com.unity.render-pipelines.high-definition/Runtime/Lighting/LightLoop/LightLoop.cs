@@ -1060,7 +1060,8 @@ namespace UnityEngine.Rendering.HighDefinition
                         probe.settings, probePositionSettings,
                         out _, out var cameraPositionSettings, 0
                     );
-                    capturePosition = probe.usesExternalOctahedralCapture ? probe.externalOctahedralCapturePosition : cameraPositionSettings.position;
+                    capturePosition = probe.usesExternalOctahedralCapture ? probe.externalOctahedralCapturePosition :
+                        (probe.usesOctahedralRealtime ? probe.octahedralCapturePosition : cameraPositionSettings.position);
                     envLightData.rangeCompressionFactorCompensation = Mathf.Max(probe.rangeCompressionFactor, 1e-6f);
 
                     // Propagate the distance based information to the env light data (only if we are not an infinite projection)

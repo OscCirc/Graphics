@@ -1,6 +1,8 @@
 # Octahedral probe validation
 
-The implementation is in [the experimental HDRP sample](../../Packages/com.unity.render-pipelines.high-definition/Samples~/SharedOctahedralProbe/README.md).
+Native HDRP Realtime/Baked/Custom support is documented in [raw Oct storage](../../Packages/com.unity.render-pipelines.high-definition/Documentation~/Reflection-Probe-Octahedral.md); its validation record is [MODES-VALIDATION.md](Validation/MODES-VALIDATION.md).
+
+The earlier implementation is in [the experimental HDRP sample](../../Packages/com.unity.render-pipelines.high-definition/Samples~/SharedOctahedralProbe/README.md).
 
 ## Run checks
 
@@ -14,7 +16,7 @@ From the repository root, in PowerShell 7:
 # This is explicitly not a complete HDRP type/assembly build.
 ./Tools/OctahedralProbe/Test-Syntax.ps1
 
-# Executes the actual production source-layout validator without Unity (requires .NET 9 SDK).
+# Executes the actual production source-layout validator and face-publication state machine without Unity (requires .NET 9 SDK).
 dotnet run --project Tools/OctahedralProbe/ManagedLayoutTests/ManagedLayoutTests.csproj -- ./artifacts/OctahedralProbeManaged
 
 # Compiles and runs the original sample HLSL on a real D3D11 hardware device.

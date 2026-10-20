@@ -35,6 +35,8 @@ namespace UnityEditor.Rendering.HighDefinition
                 || m_CubemapEditor == null)
                 return;
 
+            if (GetTarget(target).hasOctahedralRadiance)
+                GUILayout.Label("Raw Oct radiance (unfiltered)");
             m_CubemapEditor.OnPreviewSettings();
         }
 

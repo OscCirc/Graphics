@@ -10,6 +10,7 @@ $packageRoot = Join-Path $repositoryRoot 'Packages/com.unity.render-pipelines.hi
 $paths = @(
     'Runtime/Lighting/LightLoop/LightLoop.cs',
     'Runtime/Lighting/Reflection/HDProbe.cs',
+    'Runtime/Lighting/Reflection/HDAdditionalReflectionData.cs',
     'Runtime/Lighting/Reflection/HDProbe.ExternalOctahedral.cs',
     'Runtime/Lighting/Reflection/OctahedralProbeSourceLayout.cs',
     'Runtime/Lighting/Reflection/ReflectionProbeTextureCache.cs',
@@ -18,7 +19,21 @@ $paths = @(
     'Samples~/SharedOctahedralProbe/SharedOctahedralProbeAtlas.cs',
     'Samples~/SharedOctahedralProbe/SharedOctahedralProbeExample.cs',
     'Samples~/SharedOctahedralProbeHDRPIntegration/SharedOctahedralProbeHDRPBridge.cs',
-    'Tests/Editor/ExternalOctahedralProbeTests.cs'
+    'Tests/Editor/ExternalOctahedralProbeTests.cs',
+    'Tests/Editor/OctahedralProbeModeTests.cs',
+    'Runtime/Lighting/Reflection/HDProbe.OctahedralRadiance.cs',
+    'Runtime/Lighting/Reflection/OctahedralProbeRaster.cs',
+    'Runtime/Lighting/Reflection/ProbeFaceCompletion.cs',
+    'Runtime/RenderPipeline/HDRenderPipeline.OctahedralProbe.cs',
+    'Runtime/RenderPipeline/HDRenderPipeline.cs',
+    'Runtime/RenderPipeline/HDRenderPipeline.RenderGraph.cs',
+    'Editor/Lighting/Reflection/HDBakedReflectionSystem.cs',
+    'Editor/Lighting/Reflection/SerializedHDProbe.cs',
+    'Editor/Lighting/Reflection/HDProbeUI.Drawers.cs',
+    'Editor/Lighting/Reflection/HDReflectionProbeEditor.cs',
+    'Editor/Lighting/Reflection/HDReflectionProbeEditor.Octahedral.cs',
+    'Editor/Lighting/Reflection/HDReflectionProbeEditor.Gizmos.cs',
+    'Editor/Lighting/Reflection/HDReflectionProbeEditor.Preview.cs'
 )
 $checks = @()
 foreach ($configuration in @('Player','Editor')) {

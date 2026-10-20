@@ -74,10 +74,10 @@ public:
     ComPtr<ID3D11Device> device;
     ComPtr<ID3D11DeviceContext> context;
     ComPtr<ID3D11SamplerState> sampler;
-    Kernel cube, face, oct, sample, importer;
+    Kernel cube, face, oct, sample, importer, rawCube, rawFace, rawRestore;
     std::string adapter;
 
-    explicit GPU(const wchar_t* path, const wchar_t* importPath)
+    explicit GPU(const wchar_t* path, const wchar_t* importPath, const wchar_t* rawPath)
     {
         D3D_FEATURE_LEVEL level;
         check(D3D11CreateDevice(nullptr,D3D_DRIVER_TYPE_HARDWARE,nullptr,0,nullptr,0,D3D11_SDK_VERSION,&device,&level,&context));
@@ -91,6 +91,7 @@ public:
         check(device->CreateSamplerState(&s,&sampler));
         compile(cube,path,"FilterCube"); compile(face,path,"CopyFace"); compile(oct,path,"FilterOct"); compile(sample,path,"SampleAtlas");
         compile(importer,importPath,"ImportOctProbe");
+        compile(rawCube,rawPath,"RawCubeToOct"); compile(rawFace,rawPath,"RawFaceToOct"); compile(rawRestore,rawPath,"RawOctToFace");
     }
 
     void compile(Kernel& k,const wchar_t* path,const char* entry)
@@ -181,6 +182,16 @@ public:
         bind(face,"_FaceTexture",source.srv.Get()); bindUAV(face,"_Output",raw.uavs[0].Get()); dispatch(face,8,8);
     }
 
+    void radiance(Kernel& k,Texture& source,Texture& destination,int index=0)
+    {
+        set(k,"_RadianceSize",destination.size);
+        if (&k==&rawRestore) set(k,"_RadianceSourceSize",source.size);
+        if (&k!=&rawCube) set(k,"_RadianceFace",index);
+        bind(k,&k==&rawCube?"_RawCubeInput":"_RawInput",source.srv.Get());
+        bindUAV(k,"_RawOutput",destination.uavs[0].Get());
+        dispatch(k,(destination.size+7)/8,(destination.size+7)/8);
+    }
+
     void importProbe(Texture& source, Texture& destination, int sourceSlot, int destinationSlot)
     {
         auto& k=importer;
@@ -261,9 +272,9 @@ public:
     }
 };
 
-static V3 pixelDirection(int x,int y)
+static V3 pixelDirection(int x,int y,int size=64)
 {
-    float u=(x-.5f)/62, v=(y-.5f)/62, a=u,b=v;
+    float u=(x-.5f)/(size-2), v=(y-.5f)/(size-2), a=u,b=v;
     if (u<0) { if(v<0){a=1+u;b=1+v;}else if(v<1){a=-u;b=1-v;}else{a=1+u;b=v-1;} }
     else if(u<1) { if(v<0){a=1-u;b=-v;}else if(v>=1){a=1-u;b=2-v;} }
     else { if(v<0){a=u-1;b=1+v;}else if(v<1){a=2-u;b=1-v;}else{a=u-1;b=v-1;} }
@@ -300,13 +311,13 @@ static std::array<float,2> repeatUV(float u,float v)
 
 int wmain(int argc,wchar_t** argv)
 {
-    if(argc!=4){ std::cerr<<"Usage: NativeGpuTests shader.compute outputDirectory import.compute\n"; return 2; }
+    if(argc!=5){ std::cerr<<"Usage: NativeGpuTests shader.compute outputDirectory import.compute radiance.compute\n"; return 2; }
     fs::path output=argv[2]; fs::create_directories(output);
     std::ofstream report(output/"native-results.json");
     int passed=0,failed=0;
     try {
-        GPU gpu(argv[1],argv[3]); std::cout<<"GPU: "<<gpu.adapter<<"\n";
-        report<<"{\n  \"backend\": \"D3D11 hardware, RGBAHalf, original sample and production upload HLSL\",\n  \"gpu\": \""<<gpu.adapter<<"\",\n  \"cases\": [\n";
+        GPU gpu(argv[1],argv[3],argv[4]); std::cout<<"GPU: "<<gpu.adapter<<"\n";
+        report<<"{\n  \"backend\": \"D3D11 hardware, RGBAHalf, sample, production upload and raw radiance helpers; raw Core packing uses test adapter\",\n  \"gpu\": \""<<gpu.adapter<<"\",\n  \"cases\": [\n";
         auto test=[&](const char* name,const std::function<float()>& body) {
             if(passed+failed) report<<",\n";
             try { float metric=body(); ++passed; std::cout<<"PASS "<<name<<" (metric="<<metric<<")\n"; report<<"    {\"name\":\""<<name<<"\",\"passed\":true,\"metric\":"<<metric<<"}"; }
@@ -380,6 +391,35 @@ int wmain(int argc,wchar_t** argv)
             float e=0;for(int mip=0;mip<=6;++mip){auto p=gpu.read(imported,mip);int tile=256>>mip,width=512>>mip;
                 for(int y=0;y<tile;++y)for(int x=0;x<tile;++x)e=std::max(e,error(p[y*width+x],{0,0,2}));}
             require(e<.005f,"Wrong source atlas region");return e;
+        });
+        auto rawSource=gpu.make(128,1), rawProgressive=gpu.make(128,1), restoredFace=gpu.make(64,1);
+        test("raw Oct production conversion kernels compile",[]{return 0.f;});
+        test("raw Cube to Oct direction field and one-texel border",[&]{
+            for(int f=0;f<6;++f)gpu.uploadFace(cube,f,gradient);
+            gpu.radiance(gpu.rawCube,cube,rawSource);auto p=gpu.read(rawSource,0);float e=0;
+            for(int y=0;y<128;++y)for(int x=0;x<128;++x)e=std::max(e,error(p[y*128+x],gradient(pixelDirection(x,y,128))));
+            require(e<.02f,"Raw Oct direction/border error: "+std::to_string(e));return e;
+        });
+        test("raw single-face reconstruction agrees with complete Cube conversion",[&]{
+            for(int f:{4,0,5,1,3,2}){gpu.uploadFace(face,f,gradient);gpu.radiance(gpu.rawFace,face,rawProgressive,f);}
+            float e=compare(gpu.read(rawSource,0),gpu.read(rawProgressive,0));require(e<.01f,"Raw face reprojection mismatch");return e;
+        });
+        test("raw Oct restores all six Cube faces including asymmetric directions",[&]{
+            float e=0;for(int f=0;f<6;++f){gpu.radiance(gpu.rawRestore,rawSource,restoredFace,f);auto p=gpu.read(restoredFace,0);
+                for(int y=0;y<64;++y)for(int x=0;x<64;++x){V3 d=normal(cross(faceV[f],faceU[f])+faceU[f]*((x+.5f)/64*2-1)+faceV[f]*((y+.5f)/64*2-1));e=std::max(e,error(p[y*64+x],gradient(d)));}}
+            require(e<.025f,"Raw restore direction error: "+std::to_string(e));return e;
+        });
+        test("raw radiance Cube roundtrip preserves constant HDR on every face",[&]{
+            for(int f=0;f<6;++f)gpu.uploadFace(cube,f,[](V3){return Color{.25f,1.5f,3};});gpu.radiance(gpu.rawCube,cube,rawSource);
+            float e=0;for(int f=0;f<6;++f){gpu.radiance(gpu.rawRestore,rawSource,restoredFace,f);for(auto p:gpu.read(restoredFace,0))e=std::max(e,error(p,{.25f,1.5f,3}));}
+            require(e<.005f,"Raw HDR radiance changed");return e;
+        });
+        test("raw face updates preserve all other directional regions",[&]{
+            auto before=gpu.read(rawProgressive,0);gpu.uploadFace(face,0,[](V3){return Color{3,0,0};});gpu.radiance(gpu.rawFace,face,rawProgressive,0);auto after=gpu.read(rawProgressive,0);float e=0;
+            for(int y=0;y<128;++y)for(int x=0;x<128;++x){V3 d=pixelDirection(x,y,128);bool owns=d.x>=0&&std::abs(d.x)>=std::abs(d.y)&&std::abs(d.x)>=std::abs(d.z);// CPU/GPU rounding may assign exact major-axis ties to adjacent faces.
+                float boundary=std::min(std::abs(std::abs(d.x)-std::abs(d.y)),std::abs(std::abs(d.x)-std::abs(d.z)));
+                if(!owns && boundary>1e-5f)e=std::max(e,error(before[y*128+x],after[y*128+x]));}
+            require(e<.001f,"Raw update overwrote another face");return e;
         });
         // Microbenchmark only: source preparation and all Camera/Unity/Lit work are excluded.
         try {

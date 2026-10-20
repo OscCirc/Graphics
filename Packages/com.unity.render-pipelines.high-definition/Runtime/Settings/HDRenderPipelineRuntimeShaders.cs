@@ -1011,6 +1011,16 @@ namespace UnityEngine.Rendering.HighDefinition
         [SerializeField, ResourcePath("Runtime/ShaderLibrary/BlitPrefilteredOctahedralProbe.shader")]
         private Shader m_BlitPrefilteredOctahedralProbePS;
 
+        [SerializeField, ResourcePath("Runtime/ShaderLibrary/OctahedralProbeRadiance.shader")]
+        private Shader m_OctahedralProbeRadiancePS;
+
+        /// <summary>Converts raw reflection radiance between Cube, face and Oct layouts.</summary>
+        public Shader octahedralProbeRadiancePS
+        {
+            get => m_OctahedralProbeRadiancePS;
+            set => this.SetValueAndNotify(ref m_OctahedralProbeRadiancePS, value);
+        }
+
         /// <summary>Copies external prefiltered Oct data into the reflection probe atlas.</summary>
         public Shader blitPrefilteredOctahedralProbePS
         {

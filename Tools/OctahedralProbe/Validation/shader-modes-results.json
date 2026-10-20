@@ -1,0 +1,37 @@
+{
+  "passed": 6,
+  "failed": 0,
+  "stages": [
+    {
+      "profile": "vs_6_0",
+      "source": "actual Core Blit.hlsl",
+      "entry": "VertQuadPadding"
+    },
+    {
+      "profile": "ps_6_0",
+      "source": "wrapper calling actual OctahedralProbeSource.hlsl",
+      "entry": "Frag"
+    },
+    {
+      "profile": "vs_6_0",
+      "source": "actual OctahedralProbeRadiance.shader HLSLINCLUDE, real Core packing",
+      "entry": "Vert"
+    },
+    {
+      "profile": "ps_6_0",
+      "source": "actual OctahedralProbeRadiance.shader HLSLINCLUDE, real Core packing",
+      "entry": "CopyFace"
+    },
+    {
+      "profile": "ps_6_0",
+      "source": "actual OctahedralProbeRadiance.shader HLSLINCLUDE, real Core packing",
+      "entry": "OctToCube"
+    },
+    {
+      "profile": "ps_6_0",
+      "source": "actual OctahedralProbeRadiance.shader HLSLINCLUDE, real Core packing",
+      "entry": "CubeToOct"
+    }
+  ],
+  "backend": "DXC with Unity D3D11/XR aliases"
+}

@@ -1,0 +1,267 @@
+{
+  "checks": [
+    {
+      "configuration": "Player",
+      "errors": [],
+      "path": "Runtime/Lighting/LightLoop/LightLoop.cs"
+    },
+    {
+      "configuration": "Player",
+      "errors": [],
+      "path": "Runtime/Lighting/Reflection/HDProbe.cs"
+    },
+    {
+      "configuration": "Player",
+      "errors": [],
+      "path": "Runtime/Lighting/Reflection/HDAdditionalReflectionData.cs"
+    },
+    {
+      "configuration": "Player",
+      "errors": [],
+      "path": "Runtime/Lighting/Reflection/HDProbe.ExternalOctahedral.cs"
+    },
+    {
+      "configuration": "Player",
+      "errors": [],
+      "path": "Runtime/Lighting/Reflection/OctahedralProbeSourceLayout.cs"
+    },
+    {
+      "configuration": "Player",
+      "errors": [],
+      "path": "Runtime/Lighting/Reflection/ReflectionProbeTextureCache.cs"
+    },
+    {
+      "configuration": "Player",
+      "errors": [],
+      "path": "Runtime/RenderPipeline/HDRenderPipeline.ExternalOctahedralProbe.cs"
+    },
+    {
+      "configuration": "Player",
+      "errors": [],
+      "path": "Runtime/Settings/HDRenderPipelineRuntimeShaders.cs"
+    },
+    {
+      "configuration": "Player",
+      "errors": [],
+      "path": "Samples~/SharedOctahedralProbe/SharedOctahedralProbeAtlas.cs"
+    },
+    {
+      "configuration": "Player",
+      "errors": [],
+      "path": "Samples~/SharedOctahedralProbe/SharedOctahedralProbeExample.cs"
+    },
+    {
+      "configuration": "Player",
+      "errors": [],
+      "path": "Samples~/SharedOctahedralProbeHDRPIntegration/SharedOctahedralProbeHDRPBridge.cs"
+    },
+    {
+      "configuration": "Player",
+      "errors": [],
+      "path": "Tests/Editor/ExternalOctahedralProbeTests.cs"
+    },
+    {
+      "configuration": "Player",
+      "errors": [],
+      "path": "Tests/Editor/OctahedralProbeModeTests.cs"
+    },
+    {
+      "configuration": "Player",
+      "errors": [],
+      "path": "Runtime/Lighting/Reflection/HDProbe.OctahedralRadiance.cs"
+    },
+    {
+      "configuration": "Player",
+      "errors": [],
+      "path": "Runtime/Lighting/Reflection/OctahedralProbeRaster.cs"
+    },
+    {
+      "configuration": "Player",
+      "errors": [],
+      "path": "Runtime/Lighting/Reflection/ProbeFaceCompletion.cs"
+    },
+    {
+      "configuration": "Player",
+      "errors": [],
+      "path": "Runtime/RenderPipeline/HDRenderPipeline.OctahedralProbe.cs"
+    },
+    {
+      "configuration": "Player",
+      "errors": [],
+      "path": "Runtime/RenderPipeline/HDRenderPipeline.cs"
+    },
+    {
+      "configuration": "Player",
+      "errors": [],
+      "path": "Runtime/RenderPipeline/HDRenderPipeline.RenderGraph.cs"
+    },
+    {
+      "configuration": "Player",
+      "errors": [],
+      "path": "Editor/Lighting/Reflection/HDBakedReflectionSystem.cs"
+    },
+    {
+      "configuration": "Player",
+      "errors": [],
+      "path": "Editor/Lighting/Reflection/SerializedHDProbe.cs"
+    },
+    {
+      "configuration": "Player",
+      "errors": [],
+      "path": "Editor/Lighting/Reflection/HDProbeUI.Drawers.cs"
+    },
+    {
+      "configuration": "Player",
+      "errors": [],
+      "path": "Editor/Lighting/Reflection/HDReflectionProbeEditor.cs"
+    },
+    {
+      "configuration": "Player",
+      "errors": [],
+      "path": "Editor/Lighting/Reflection/HDReflectionProbeEditor.Octahedral.cs"
+    },
+    {
+      "configuration": "Player",
+      "errors": [],
+      "path": "Editor/Lighting/Reflection/HDReflectionProbeEditor.Gizmos.cs"
+    },
+    {
+      "configuration": "Player",
+      "errors": [],
+      "path": "Editor/Lighting/Reflection/HDReflectionProbeEditor.Preview.cs"
+    },
+    {
+      "configuration": "Editor",
+      "errors": [],
+      "path": "Runtime/Lighting/LightLoop/LightLoop.cs"
+    },
+    {
+      "configuration": "Editor",
+      "errors": [],
+      "path": "Runtime/Lighting/Reflection/HDProbe.cs"
+    },
+    {
+      "configuration": "Editor",
+      "errors": [],
+      "path": "Runtime/Lighting/Reflection/HDAdditionalReflectionData.cs"
+    },
+    {
+      "configuration": "Editor",
+      "errors": [],
+      "path": "Runtime/Lighting/Reflection/HDProbe.ExternalOctahedral.cs"
+    },
+    {
+      "configuration": "Editor",
+      "errors": [],
+      "path": "Runtime/Lighting/Reflection/OctahedralProbeSourceLayout.cs"
+    },
+    {
+      "configuration": "Editor",
+      "errors": [],
+      "path": "Runtime/Lighting/Reflection/ReflectionProbeTextureCache.cs"
+    },
+    {
+      "configuration": "Editor",
+      "errors": [],
+      "path": "Runtime/RenderPipeline/HDRenderPipeline.ExternalOctahedralProbe.cs"
+    },
+    {
+      "configuration": "Editor",
+      "errors": [],
+      "path": "Runtime/Settings/HDRenderPipelineRuntimeShaders.cs"
+    },
+    {
+      "configuration": "Editor",
+      "errors": [],
+      "path": "Samples~/SharedOctahedralProbe/SharedOctahedralProbeAtlas.cs"
+    },
+    {
+      "configuration": "Editor",
+      "errors": [],
+      "path": "Samples~/SharedOctahedralProbe/SharedOctahedralProbeExample.cs"
+    },
+    {
+      "configuration": "Editor",
+      "errors": [],
+      "path": "Samples~/SharedOctahedralProbeHDRPIntegration/SharedOctahedralProbeHDRPBridge.cs"
+    },
+    {
+      "configuration": "Editor",
+      "errors": [],
+      "path": "Tests/Editor/ExternalOctahedralProbeTests.cs"
+    },
+    {
+      "configuration": "Editor",
+      "errors": [],
+      "path": "Tests/Editor/OctahedralProbeModeTests.cs"
+    },
+    {
+      "configuration": "Editor",
+      "errors": [],
+      "path": "Runtime/Lighting/Reflection/HDProbe.OctahedralRadiance.cs"
+    },
+    {
+      "configuration": "Editor",
+      "errors": [],
+      "path": "Runtime/Lighting/Reflection/OctahedralProbeRaster.cs"
+    },
+    {
+      "configuration": "Editor",
+      "errors": [],
+      "path": "Runtime/Lighting/Reflection/ProbeFaceCompletion.cs"
+    },
+    {
+      "configuration": "Editor",
+      "errors": [],
+      "path": "Runtime/RenderPipeline/HDRenderPipeline.OctahedralProbe.cs"
+    },
+    {
+      "configuration": "Editor",
+      "errors": [],
+      "path": "Runtime/RenderPipeline/HDRenderPipeline.cs"
+    },
+    {
+      "configuration": "Editor",
+      "errors": [],
+      "path": "Runtime/RenderPipeline/HDRenderPipeline.RenderGraph.cs"
+    },
+    {
+      "configuration": "Editor",
+      "errors": [],
+      "path": "Editor/Lighting/Reflection/HDBakedReflectionSystem.cs"
+    },
+    {
+      "configuration": "Editor",
+      "errors": [],
+      "path": "Editor/Lighting/Reflection/SerializedHDProbe.cs"
+    },
+    {
+      "configuration": "Editor",
+      "errors": [],
+      "path": "Editor/Lighting/Reflection/HDProbeUI.Drawers.cs"
+    },
+    {
+      "configuration": "Editor",
+      "errors": [],
+      "path": "Editor/Lighting/Reflection/HDReflectionProbeEditor.cs"
+    },
+    {
+      "configuration": "Editor",
+      "errors": [],
+      "path": "Editor/Lighting/Reflection/HDReflectionProbeEditor.Octahedral.cs"
+    },
+    {
+      "configuration": "Editor",
+      "errors": [],
+      "path": "Editor/Lighting/Reflection/HDReflectionProbeEditor.Gizmos.cs"
+    },
+    {
+      "configuration": "Editor",
+      "errors": [],
+      "path": "Editor/Lighting/Reflection/HDReflectionProbeEditor.Preview.cs"
+    }
+  ],
+  "backend": "Roslyn syntax only, not full HDRP type compilation",
+  "failed": 0,
+  "passed": 52
+}

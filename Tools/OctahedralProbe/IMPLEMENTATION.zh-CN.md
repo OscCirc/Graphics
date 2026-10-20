@@ -2,7 +2,39 @@
 
 这是基于 HDRP 17.6 的实验分支，包含独立原型和显式启用的 HDRP 接入口。不是已经完成全部场景验收的生产版本。
 
-## 当前实现了什么
+
+## 第二阶段：接入 HDRP 自己的三种模式
+
+现在已加入原调度的接入口，不再只依赖第一版 Custom 样例：
+
+- **Realtime**：勾选 `Store Raw Oct Radiance`，仍保持 HDRP 的 Realtime 模式。EveryFrame、OnEnable、OnDemand、可见性、请求依赖和分帧由原逻辑决定。公共二维面每执行完一面即写入该 Probe 的 pending Oct。
+- **发布与失败重试**：每 Probe 保留独立的 pending / published 数据。六面实际执行完成且调度器发出完成步骤后才交换；重新调度的面会撤销旧完成位，失败会撤销发布请求。旧图像和旧捕获位置在此之前不变。
+- **Baked**：原有烘焙临时 Cube 转成原始 Oct EXR，缓存哈希区分格式，导入后为线性、无 mip 的 Texture2D。
+- **Custom**：兼容原 Cube，也可直接指定符合原始 Oct 约定的 Texture2D；Custom 烘焙同样支持 Oct。探针右键菜单可把已指定的 Cube 转成新 Oct 资产并替换本 Probe 引用，原 Cube 资产保留。
+- **GGX / Charlie**：原始 Oct 源先还原到公共临时 Cube 并生成普通 mip，再交给原 HDRP 过滤器，最终仍写入原 Oct 反射图集。这条新路径支持现有过滤器；下面第一版外部预过滤上传接口仍是 GGX-only。
+- **编辑器**：增加存储选项、Texture2D 输入校验、Oct 纹理预览和 chrome gizmo 方向采样。保留 Baked 的原 SH 归一化流程。
+
+主要新调用链：
+
+```text
+GenerateProbeRenderRequests → AddHDProbeRenderRequests
+  → HDProbe.NextRenderSteps（原更新语义）
+  → 公共二维面 RenderRequest
+  → CompleteOctahedralProbeFace → 写入 pending Oct
+  → 六面与发布条件齐全 → 发布 raw Oct / 版本 / 捕获位置
+  → ReflectionProbeTextureCache.UpdateTexture
+  → RestoreRawOctahedralCube → 原 GGX/Charlie → 原图集
+```
+
+这里的“raw Oct”只有原始辐射度与 mip0 的每边一个 texel 边框，不是第一版样例带粗糙度 mip 的预过滤 Oct。两种资源不能混用。实时前台结果按 Probe 身份作为图集缓存键，换前台纹理不会每次申请新槽位。
+
+**仍需说明的边界**：这不是消除全部 Cube。Baked 场景捕获仍有临时 Cube，原过滤器前仍有公共 Cube。实时更新期间可能同时存在前后台 Oct，因此峰值显存不保证下降。多探针分帧时保留各自后台，当前没有增加一个强制限流调度器。天空、雾/云的天空消费者、引擎原生 Cube API 等独立系统未改；URP 已由用户在其他位置实现，本分支不重复修改。
+
+本阶段执行了 20 项 GPU、23 项纯 .NET 检查以及 6 个 DXC 阶段编译；相关代码做了 52 项语法检查。新增 Editor 用例已准备，完整 HDRP 编译与实际场景、烘焙/导入仍受本机 Editor 版本和许可证限制。详见 [本阶段验证记录](Validation/MODES-VALIDATION.md) 与 [使用说明](../../Packages/com.unity.render-pipelines.high-definition/Documentation~/Reflection-Probe-Octahedral.md)。
+
+以下内容记录第一阶段独立原型和外部预过滤 API，不能将其限制与新 raw Oct 路径混淆。
+
+## 第一阶段实现了什么
 
 有两条路径：
 

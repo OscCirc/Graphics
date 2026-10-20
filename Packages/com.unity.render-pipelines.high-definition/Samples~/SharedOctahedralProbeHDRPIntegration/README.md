@@ -1,5 +1,7 @@
 # Experimental HDRP shared-Oct bridge
 
+For native HDRP Realtime/Baked/Custom integration, use [raw Oct reflection probe storage](../../Documentation~/Reflection-Probe-Octahedral.md). This older sample remains a separate prefiltered external-provider API, with a different source contract and GGX-only restriction.
+
 This adapter connects the shared-capture prototype to HDRP's existing reflection probe atlas. Lit continues to use its normal environment-light records, proxy-volume intersection, distance-based roughness, FGD and influence weights. It does not introduce an alternate material shader or an external global atlas binding.
 
 **Validation status:** the source prefilter and production upload math passed native D3D11 GPU checks. The standalone sample compiles against installed Tuanjie assemblies, and modified HDRP files pass syntax checks. A complete HDRP 17.6 build and this bridge's scene rendering are **not yet verified**: this machine has no matching Unity 6 Editor, and its installed Tuanjie Editor cannot launch with the current license.

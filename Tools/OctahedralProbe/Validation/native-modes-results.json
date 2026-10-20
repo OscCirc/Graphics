@@ -1,0 +1,108 @@
+{
+  "backend": "D3D11 hardware, RGBAHalf, sample, production upload and raw radiance helpers; raw Core packing uses test adapter",
+  "gpu": "NVIDIA GeForce RTX 5060 Laptop GPU",
+  "cases": [
+    {
+      "name": "all four compute entry points compile",
+      "passed": true,
+      "metric": 0
+    },
+    {
+      "name": "shared cube updates preserve independent probe tiles",
+      "passed": true,
+      "metric": 0
+    },
+    {
+      "name": "constant HDR radiance is preserved at every GGX mip",
+      "passed": true,
+      "metric": 0.00195312
+    },
+    {
+      "name": "cube direction reprojection and border match analytic reference",
+      "passed": true,
+      "metric": 0.00147307
+    },
+    {
+      "name": "six individual faces reconstruct the same Oct image",
+      "passed": true,
+      "metric": 0.00292969
+    },
+    {
+      "name": "Oct-source GGX matches cube-source GGX across roughness mips",
+      "passed": true,
+      "metric": 0.00146484
+    },
+    {
+      "name": "fractional LOD and Oct boundary do not bleed adjacent tiles",
+      "passed": true,
+      "metric": 0.000146508
+    },
+    {
+      "name": "fractional LOD matches independent integer-LOD samples",
+      "passed": true,
+      "metric": 9.31323e-10
+    },
+    {
+      "name": "roughness removes high-frequency directional variance",
+      "passed": true,
+      "metric": 0.000543684
+    },
+    {
+      "name": "all partial face updates preserve pixels owned by other faces",
+      "passed": true,
+      "metric": 0
+    },
+    {
+      "name": "production Oct import helper compiles",
+      "passed": true,
+      "metric": 0
+    },
+    {
+      "name": "production import consumes a shared source before it is reused",
+      "passed": true,
+      "metric": 0.000976562
+    },
+    {
+      "name": "production import converts border layout and roughness mip range",
+      "passed": true,
+      "metric": 0.00100833
+    },
+    {
+      "name": "production import selects the requested source tile",
+      "passed": true,
+      "metric": 0.000976562
+    },
+    {
+      "name": "raw Oct production conversion kernels compile",
+      "passed": true,
+      "metric": 0
+    },
+    {
+      "name": "raw Cube to Oct direction field and one-texel border",
+      "passed": true,
+      "metric": 0.00147218
+    },
+    {
+      "name": "raw single-face reconstruction agrees with complete Cube conversion",
+      "passed": true,
+      "metric": 0.00292969
+    },
+    {
+      "name": "raw Oct restores all six Cube faces including asymmetric directions",
+      "passed": true,
+      "metric": 0.000972301
+    },
+    {
+      "name": "raw radiance Cube roundtrip preserves constant HDR on every face",
+      "passed": true,
+      "metric": 0
+    },
+    {
+      "name": "raw face updates preserve all other directional regions",
+      "passed": true,
+      "metric": 0
+    }
+  ],
+  "passed": 20,
+  "failed": 0
+}

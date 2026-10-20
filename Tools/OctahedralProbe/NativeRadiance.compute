@@ -1,0 +1,48 @@
+// D3D11 test adapter. Core's Oct packing is supplied by the already-tested sample
+// because FXC cannot preprocess current Common.hlsl. DXC separately compiles the
+// actual production ShaderLab HLSLINCLUDE with the real Core packing functions.
+SamplerState sampler_LinearClamp;
+float2 EncodeOct(float3 n)
+{
+    n /= max(dot(abs(n), 1.0), 1e-6);
+    float t = saturate(-n.z);
+    return (n.xy + float2(n.x >= 0 ? t : -t, n.y >= 0 ? t : -t)) * 0.5 + 0.5;
+}
+float3 DecodeOct(float2 uv)
+{
+    float2 f = uv * 2 - 1;
+    float3 n = float3(f, 1 - abs(f.x) - abs(f.y));
+    float t = max(-n.z, 0.0);
+    n.xy += float2(n.x >= 0 ? -t : t, n.y >= 0 ? -t : t);
+    return normalize(n);
+}
+#include "../../Packages/com.unity.render-pipelines.high-definition/Runtime/Lighting/Reflection/OctahedralProbeSource.hlsl"
+#define PackNormalOctQuadEncode(d) (EncodeOct(d) * 2 - 1)
+#define UnpackNormalOctQuadEncode(uv) DecodeOct((uv) * 0.5 + 0.5)
+#include "../../Packages/com.unity.render-pipelines.high-definition/Runtime/Lighting/Reflection/OctahedralProbeRadiance.hlsl"
+TextureCube<float4> _RawCubeInput;
+Texture2D<float4> _RawInput;
+RWTexture2D<float4> _RawOutput;
+int _RadianceSize, _RadianceSourceSize, _RadianceFace;
+[numthreads(8,8,1)]
+void RawCubeToOct(uint3 id : SV_DispatchThreadID)
+{
+    if (any(id.xy >= (uint)_RadianceSize)) return;
+    float3 d = OctProbeRawDirection((float2(id.xy) + 0.5) / _RadianceSize, _RadianceSize);
+    _RawOutput[id.xy] = float4(_RawCubeInput.SampleLevel(sampler_LinearClamp, d, 0).rgb, 1);
+}
+[numthreads(8,8,1)]
+void RawFaceToOct(uint3 id : SV_DispatchThreadID)
+{
+    if (any(id.xy >= (uint)_RadianceSize)) return;
+    float3 d = OctProbeRawDirection((float2(id.xy) + 0.5) / _RadianceSize, _RadianceSize);
+    if (OctProbeDirectionFace(d) != _RadianceFace) return;
+    _RawOutput[id.xy] = float4(_RawInput.SampleLevel(sampler_LinearClamp, OctProbeDirectionFaceUV(d, _RadianceFace), 0).rgb, 1);
+}
+[numthreads(8,8,1)]
+void RawOctToFace(uint3 id : SV_DispatchThreadID)
+{
+    if (any(id.xy >= (uint)_RadianceSize)) return;
+    float3 d = OctProbeFaceDirection((float2(id.xy) + 0.5) / _RadianceSize, _RadianceFace);
+    _RawOutput[id.xy] = float4(OctProbeRawSample(_RawInput, sampler_LinearClamp, d, _RadianceSourceSize), 1);
+}

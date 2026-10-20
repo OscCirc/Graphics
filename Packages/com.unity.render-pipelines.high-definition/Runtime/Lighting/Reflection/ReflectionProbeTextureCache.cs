@@ -34,6 +34,9 @@ namespace UnityEngine.Rendering.HighDefinition
 
         Material m_ConvertTextureMaterial;
         MaterialPropertyBlock m_ConvertTexturePropertyBlock = new MaterialPropertyBlock();
+        OctahedralProbeRaster m_RawOctahedralRaster;
+        readonly Dictionary<int, RenderTexture> m_RawOctahedralCubes = new Dictionary<int, RenderTexture>();
+        Shader m_RawOctahedralShader;
         Shader m_PrefilteredOctahedralShader;
         Material m_PrefilteredOctahedralMaterial;
         MaterialPropertyBlock m_PrefilteredOctahedralProperties = new MaterialPropertyBlock();
@@ -106,6 +109,7 @@ namespace UnityEngine.Rendering.HighDefinition
             m_DecreaseResToFit = decreaseResToFit;
             m_ConvertTextureMaterial = CoreUtils.CreateEngineMaterial(renderPipeline.runtimeShaders.blitCubeTextureFacePS);
             m_PrefilteredOctahedralShader = renderPipeline.runtimeShaders.blitPrefilteredOctahedralProbePS;
+            m_RawOctahedralShader = renderPipeline.runtimeShaders.octahedralProbeRadiancePS;
         }
 
         private static TextureId GetTextureID(HDProbe probe)
@@ -116,7 +120,7 @@ namespace UnityEngine.Rendering.HighDefinition
         private static TextureId GetTextureIDAndSize(HDProbe probe, out int textureSize)
         {
             textureSize = GetTextureSizeInAtlas(probe);
-            TextureId textureId = probe.usesExternalOctahedralCapture
+            TextureId textureId = (probe.usesExternalOctahedralCapture || probe.usesOctahedralRealtime)
                 ? new TextureId(probe.GetEntityId(), textureSize)
                 : new TextureId(probe.texture.GetEntityId(), textureSize);
 
@@ -125,7 +129,8 @@ namespace UnityEngine.Rendering.HighDefinition
 
         private static int GetTextureSizeInAtlas(HDProbe probe)
         {
-            int textureSize = probe.usesExternalOctahedralCapture ? (int)probe.cubeResolution : probe.texture.width;
+            int textureSize = probe.usesExternalOctahedralCapture ? (int)probe.cubeResolution :
+                (probe.hasOctahedralRadiance ? probe.texture.width / 2 : probe.texture.width);
 
             switch (probe.type)
             {
@@ -510,7 +515,9 @@ namespace UnityEngine.Rendering.HighDefinition
                         return false;
                 }
 
-                RenderTexture convertedTextureTemp = PrepareCubeReflectionProbeTexture(cmd, texture, textureSize);
+                RenderTexture convertedTextureTemp = probe.hasOctahedralRadiance
+                    ? RestoreRawOctahedralCube(cmd, texture, Mathf.Min(texture.width / 2, (int)probe.cubeResolution))
+                    : PrepareCubeReflectionProbeTexture(cmd, texture, textureSize);
 
                 for (int filterIndex = 0; filterIndex < m_IBLFiltersBSDF.Length; ++filterIndex)
                 {
@@ -520,6 +527,31 @@ namespace UnityEngine.Rendering.HighDefinition
 
                 return true;
             }
+        }
+
+        RenderTexture RestoreRawOctahedralCube(CommandBuffer cmd, Texture source, int faceSize)
+        {
+            if (!HDProbe.IsValidRawOctTexture(source))
+                throw new ArgumentException("Raw Oct radiance must be square, power-of-two and at least eight texels.");
+            // The stock convolution shaders require at least seven Cube mips.
+            faceSize = Mathf.Max(faceSize, 64);
+            if (m_RawOctahedralRaster == null) m_RawOctahedralRaster = new OctahedralProbeRaster(m_RawOctahedralShader);
+            if (!m_RawOctahedralCubes.TryGetValue(faceSize, out var cube))
+            {
+                cube = new RenderTexture(faceSize, faceSize, 0, m_AtlasFormat)
+                {
+                    name = "Shared Oct radiance convolution Cube", dimension = TextureDimension.Cube,
+                    useMipMap = true, autoGenerateMips = false, filterMode = FilterMode.Trilinear
+                };
+                if (!cube.Create())
+                {
+                    CoreUtils.Destroy(cube);
+                    throw new InvalidOperationException("Unable to allocate the shared Oct convolution Cube.");
+                }
+                m_RawOctahedralCubes.Add(faceSize, cube);
+            }
+            m_RawOctahedralRaster.ToCube(cmd, source, cube);
+            return cube;
         }
 
         // The source is consumed only by this explicit upload, never by a later cache miss.
@@ -626,6 +658,10 @@ namespace UnityEngine.Rendering.HighDefinition
             m_TextureLRUAndHash = null;
 
             m_ConvertTextureMaterial = null;
+            m_RawOctahedralRaster?.Dispose();
+            m_RawOctahedralRaster = null;
+            foreach (var cube in m_RawOctahedralCubes.Values) { cube.Release(); CoreUtils.Destroy(cube); }
+            m_RawOctahedralCubes.Clear();
             CoreUtils.Destroy(m_PrefilteredOctahedralMaterial);
             m_PrefilteredOctahedralMaterial = null;
 
@@ -662,7 +698,7 @@ namespace UnityEngine.Rendering.HighDefinition
             }
             Texture texture = probe.texture;
             Assert.IsTrue(texture.width == texture.height);
-            Assert.IsTrue(texture.dimension == TextureDimension.Cube);
+            Assert.IsTrue(texture.dimension == TextureDimension.Cube || probe.hasOctahedralRadiance);
 
             fetchIndex = m_CubeFrameFetchIndex++;
 

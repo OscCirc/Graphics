@@ -63,6 +63,10 @@ namespace UnityEditor.Rendering.HighDefinition
 
 #endif
 
+                if ((ProbeSettings.ProbeType)serialized.probeSettings.type.intValue == ProbeSettings.ProbeType.ReflectionProbe)
+                    EditorGUILayout.PropertyField(serialized.useOctahedralRadiance, EditorGUIUtility.TrTextContent(
+                        "Store Raw Oct Radiance", "Use Oct output for baked/realtime capture. Custom Texture2D inputs are raw Oct; Cube inputs remain supported."));
+
                 switch ((ProbeSettings.Mode)serialized.probeSettings.mode.intValue)
                 {
                     case ProbeSettings.Mode.Realtime:
@@ -83,6 +87,10 @@ namespace UnityEditor.Rendering.HighDefinition
                                 serialized.customTexture.objectReferenceValue = customTexture;
                         }
                         EditorGUI.EndProperty();
+                        if (serialized.target.type == ProbeSettings.ProbeType.ReflectionProbe &&
+                            serialized.customTexture.objectReferenceValue is Texture custom &&
+                            custom.dimension != TextureDimension.Cube && !HDProbe.IsValidRawOctTexture(custom))
+                            EditorGUILayout.HelpBox("Assign a Cubemap or a linear square power-of-two raw Oct Texture2D, with one border texel per side.", MessageType.Error);
                         break;
                     }
                 }
@@ -148,7 +156,7 @@ namespace UnityEditor.Rendering.HighDefinition
                     EditorGUILayout.PropertyField(serialized.probeSettings.distanceBasedRoughness, EditorGUIUtility.TrTextContent("Distance Based Roughness", "When enabled, HDRP uses the assigned Proxy Volume to calculate distance based roughness for reflections. This produces more physically-accurate results if the Proxy Volume closely matches the environment."));
             }
 
-            static readonly string[] k_BakeCustomOptionText = { "Bake as new Cubemap..." };
+            static readonly string[] k_BakeCustomOptionText = { "Bake as new Reflection Texture..." };
             static readonly string[] k_BakeButtonsText = { "Bake All Reflection Probes" };
             public static void DrawBakeButton(SerializedHDProbe serialized, Editor owner)
             {

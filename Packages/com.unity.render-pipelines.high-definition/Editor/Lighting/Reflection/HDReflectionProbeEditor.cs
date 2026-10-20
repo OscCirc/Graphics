@@ -98,6 +98,6 @@ namespace UnityEditor.Rendering.HighDefinition
             }
         };
 
-        Type HDProbeUI.IProbeUISettingsProvider.customTextureType => typeof(Cubemap);
+        Type HDProbeUI.IProbeUISettingsProvider.customTextureType => typeof(Texture);
     }
 }
