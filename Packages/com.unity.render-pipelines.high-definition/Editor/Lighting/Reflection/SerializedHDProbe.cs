@@ -9,6 +9,7 @@ namespace UnityEditor.Rendering.HighDefinition
 
         internal SerializedProperty bakedTexture;
         internal SerializedProperty customTexture;
+        internal SerializedProperty useOctahedralRadiance;
         internal SerializedProbeSettings probeSettings;
         internal SerializedProbeSettingsOverride probeSettingsOverride;
         internal SerializedProperty proxyVolume;
@@ -21,6 +22,7 @@ namespace UnityEditor.Rendering.HighDefinition
 
             bakedTexture = serializedObject.Find((HDProbe p) => p.bakedTexture);
             customTexture = serializedObject.Find((HDProbe p) => p.customTexture);
+            useOctahedralRadiance = serializedObject.FindProperty("m_UseOctahedralRadiance");
             proxyVolume = serializedObject.Find((HDProbe p) => p.proxyVolume);
             probeSettings = new SerializedProbeSettings(serializedObject.FindProperty("m_ProbeSettings"));
             probeSettingsOverride = new SerializedProbeSettingsOverride(serializedObject.FindProperty("m_ProbeSettingsOverride"));

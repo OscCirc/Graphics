@@ -42,7 +42,10 @@ namespace UnityEditor.Rendering.HighDefinition
             );
             var capturePosition = cameraPositionSettings.position;
 
-            material.SetTexture("_Cubemap", probe.texture);
+            bool oct = probe.hasOctahedralRadiance;
+            material.SetFloat("_IsOctahedral", oct ? 1 : 0);
+            material.SetTexture(oct ? "_Octahedral" : "_Cubemap", probe.texture);
+            material.SetFloat("_OctahedralSize", probe.texture != null ? probe.texture.width : 1);
             material.SetPass(0);
             Graphics.DrawMeshNow(sphere, Matrix4x4.TRS(capturePosition, Quaternion.identity, Vector3.one * capturePointPreviewSize));
 

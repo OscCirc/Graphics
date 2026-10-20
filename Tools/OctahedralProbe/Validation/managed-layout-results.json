@@ -1,0 +1,55 @@
+{
+  "backend": ".NET, actual production layout source",
+  "passed": 12,
+  "failed": 0,
+  "cases": [
+    {
+      "name": "valid nonzero source tile",
+      "passed": true
+    },
+    {
+      "name": "minimum two-level source tile",
+      "passed": true
+    },
+    {
+      "name": "default layout is rejected",
+      "passed": true
+    },
+    {
+      "name": "non power-of-two atlas is rejected",
+      "passed": true
+    },
+    {
+      "name": "non power-of-two tile is rejected",
+      "passed": true
+    },
+    {
+      "name": "out of bounds source region is rejected",
+      "passed": true
+    },
+    {
+      "name": "unaligned source region is rejected",
+      "passed": true
+    },
+    {
+      "name": "negative source region is rejected",
+      "passed": true
+    },
+    {
+      "name": "coarsest mip must retain its interior",
+      "passed": true
+    },
+    {
+      "name": "shift overflow cannot bypass validation",
+      "passed": true
+    },
+    {
+      "name": "uninitialized source mip is rejected",
+      "passed": true
+    },
+    {
+      "name": "mismatched texture dimensions are rejected",
+      "passed": true
+    }
+  ]
+}

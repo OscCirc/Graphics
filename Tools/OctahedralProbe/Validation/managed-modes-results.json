@@ -1,0 +1,99 @@
+{
+  "backend": ".NET, actual production layout and face-publication sources",
+  "passed": 23,
+  "failed": 0,
+  "cases": [
+    {
+      "name": "valid nonzero source tile",
+      "passed": true
+    },
+    {
+      "name": "minimum two-level source tile",
+      "passed": true
+    },
+    {
+      "name": "default layout is rejected",
+      "passed": true
+    },
+    {
+      "name": "non power-of-two atlas is rejected",
+      "passed": true
+    },
+    {
+      "name": "non power-of-two tile is rejected",
+      "passed": true
+    },
+    {
+      "name": "out of bounds source region is rejected",
+      "passed": true
+    },
+    {
+      "name": "unaligned source region is rejected",
+      "passed": true
+    },
+    {
+      "name": "negative source region is rejected",
+      "passed": true
+    },
+    {
+      "name": "coarsest mip must retain its interior",
+      "passed": true
+    },
+    {
+      "name": "shift overflow cannot bypass validation",
+      "passed": true
+    },
+    {
+      "name": "uninitialized source mip is rejected",
+      "passed": true
+    },
+    {
+      "name": "mismatched texture dimensions are rejected",
+      "passed": true
+    },
+    {
+      "name": "publication before completion never exposes partial radiance",
+      "passed": true
+    },
+    {
+      "name": "six faces wait for the scheduler publication step",
+      "passed": true
+    },
+    {
+      "name": "duplicate face execution cannot replace a missing face",
+      "passed": true
+    },
+    {
+      "name": "all 720 interleavings publish only after six distinct faces",
+      "passed": true
+    },
+    {
+      "name": "negative face is rejected",
+      "passed": true
+    },
+    {
+      "name": "face six is rejected",
+      "passed": true
+    },
+    {
+      "name": "capture reset drops all completion and publication state",
+      "passed": true
+    },
+    {
+      "name": "interleaved probes own independent publication state",
+      "passed": true
+    },
+    {
+      "name": "rescheduled faces withdraw an older completion before publication",
+      "passed": true
+    },
+    {
+      "name": "failed execution withdraws publication until the scheduler retries",
+      "passed": true
+    },
+    {
+      "name": "invalid face masks cannot retain completion state",
+      "passed": true
+    }
+  ]
+}

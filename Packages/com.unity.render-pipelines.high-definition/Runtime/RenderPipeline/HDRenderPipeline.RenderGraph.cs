@@ -506,6 +506,7 @@ namespace UnityEngine.Rendering.HighDefinition
                     renderRequest, aovRequest, aovBuffers,
                     aovCustomPassBuffers, renderContext, commandBuffer);
                 m_RenderGraph.EndRecordingAndExecute();
+                if (renderRequest.octahedralProbe != null) m_OctahedralRenderRequestSucceeded = true;
             }
             catch (Exception e)
             {

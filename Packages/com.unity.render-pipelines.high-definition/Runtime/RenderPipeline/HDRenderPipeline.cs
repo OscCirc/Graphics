@@ -1018,6 +1018,7 @@ namespace UnityEngine.Rendering.HighDefinition
             m_DebugDisplaySettings.UnregisterDebug();
 #endif
 
+            CleanupOctahedralProbeCapture();
             CleanupLightLoop();
 
             CleanupSubsurfaceScattering();
@@ -1529,6 +1530,11 @@ namespace UnityEngine.Rendering.HighDefinition
             public bool cullingResultIsShared;
             public XRPass xrPass;
             public bool isLast;
+            public HDProbe octahedralProbe;
+            public RenderTexture octahedralCaptureFace;
+            public RenderTexture octahedralPending;
+            public CubemapFace octahedralFace;
+            public bool octahedralFaceValid;
         }
 
         private void VisitRenderRequestRecursive(List<RenderRequest> requests, List<int> visitStatus, int requestIndex, List<int> renderIndices)
@@ -1817,10 +1823,13 @@ namespace UnityEngine.Rendering.HighDefinition
             ScriptableRenderContext renderContext
         )
         {
-            var position = ProbeCapturePositionSettings.ComputeFrom(
-                visibleProbe,
-                viewerTransform
-            );
+            if (visibleProbe.IsTurnedOff()) return;
+            var probeFormat = (GraphicsFormat)m_Asset.currentPlatformRenderPipelineSettings.lightLoopSettings.reflectionProbeFormat;
+            // Validate capture size/format before consuming steps or freezing this cycle's position.
+            visibleProbe.AllocTexture(probeFormat);
+            var position = visibleProbe.usesOctahedralRealtime
+                ? visibleProbe.GetOctahedralPositionSettings(viewerTransform)
+                : ProbeCapturePositionSettings.ComputeFrom(visibleProbe, viewerTransform);
             cameraSettings.Clear();
             cameraPositionSettings.Clear();
             cameraCubemapFaces.Clear();
@@ -1829,6 +1838,7 @@ namespace UnityEngine.Rendering.HighDefinition
                 return;
 
             var renderSteps = visibleProbe.NextRenderSteps();
+            if (visibleProbe.usesOctahedralRealtime) visibleProbe.BeginOctahedralRenderSteps(renderSteps);
 
             HDRenderUtilities.GenerateRenderingSettingsFor(
                 visibleProbe.settings, position,
@@ -1837,8 +1847,10 @@ namespace UnityEngine.Rendering.HighDefinition
                 referenceAspect: referenceAspect
             );
 
-            var probeFormat = (GraphicsFormat)m_Asset.currentPlatformRenderPipelineSettings.lightLoopSettings.reflectionProbeFormat;
-            visibleProbe.AllocTexture(probeFormat);
+            bool octCapture = visibleProbe.usesOctahedralRealtime;
+            RTHandle captureTarget = octCapture
+                ? GetOctahedralCaptureFace((int)visibleProbe.cubeResolution, probeFormat)
+                : visibleProbe.realtimeTextureRTH;
             visibleProbe.SetCameraAnchor(cameraSettings, viewerTransform);
             var isPlanarReflectionProbe = visibleProbe.type == ProbeSettings.ProbeType.PlanarProbe;
 
@@ -1864,7 +1876,7 @@ namespace UnityEngine.Rendering.HighDefinition
                 }
 
                 // We need to set a targetTexture with the right otherwise when setting pixelRect, it will be rescaled internally to the size of the screen
-                camera.targetTexture = visibleProbe.realtimeTexture;
+                camera.targetTexture = captureTarget;
 
                 // Warning: accessing Object.name generate 48B of garbage at each frame here
                 // camera.name = HDUtils.ComputeProbeCameraName(visibleProbe.name, j, viewerTransform?.name);
@@ -1873,7 +1885,7 @@ namespace UnityEngine.Rendering.HighDefinition
 
                 camera.ApplySettings(cameraSettings[j]);
                 camera.ApplySettings(cameraPositionSettings[j]);
-                camera.pixelRect = new Rect(0, 0, visibleProbe.realtimeTexture.width, visibleProbe.realtimeTexture.height);
+                camera.pixelRect = new Rect(0, 0, captureTarget.rt.width, captureTarget.rt.height);
 
                 var _cullingResults = m_CullingResultsPool.Get();
                 _cullingResults.Reset();
@@ -1939,8 +1951,8 @@ namespace UnityEngine.Rendering.HighDefinition
                     ? HDAdditionalCameraData.FlipYMode.ForceFlipY
                     : HDAdditionalCameraData.FlipYMode.Automatic;
 
-                if (!visibleProbe.realtimeTexture.IsCreated())
-                    visibleProbe.realtimeTexture.Create();
+                if (!captureTarget.rt.IsCreated())
+                    captureTarget.rt.Create();
 
                 var renderData = new HDProbe.RenderData(
                     camera.worldToCameraMatrix,
@@ -1982,8 +1994,8 @@ namespace UnityEngine.Rendering.HighDefinition
                 {
                     request.target = new RenderRequest.Target
                     {
-                        colorId = visibleProbe.realtimeTextureRTH,
-                        face = face,
+                        colorId = captureTarget,
+                        face = octCapture ? CubemapFace.Unknown : face,
                         isProbe = true
                     };
                 }
@@ -2006,6 +2018,14 @@ namespace UnityEngine.Rendering.HighDefinition
                     skippedRenderSteps |= ProbeRenderStepsExt.FromCubeFace(face);
                 }
 
+                if (octCapture)
+                {
+                    request.octahedralProbe = visibleProbe;
+                    request.octahedralCaptureFace = captureTarget;
+                    request.octahedralPending = visibleProbe.pendingOctahedralRadiance;
+                    request.octahedralFace = face;
+                    request.octahedralFaceValid = !skippedRenderSteps.HasCubeFace(face);
+                }
                 renderRequests.Add(request);
 
 
@@ -2027,7 +2047,10 @@ namespace UnityEngine.Rendering.HighDefinition
             if (renderSteps.HasFlag(ProbeRenderSteps.IncrementRenderCount))
             {
                 if (skippedRenderSteps.IsNone())
-                    visibleProbe.IncrementRealtimeRenderCount();
+                {
+                    if (octCapture) visibleProbe.RequestOctahedralPublication();
+                    else visibleProbe.IncrementRealtimeRenderCount();
+                }
                 else
                     skippedRenderSteps |= ProbeRenderSteps.IncrementRenderCount;
             }
@@ -2484,10 +2507,20 @@ namespace UnityEngine.Rendering.HighDefinition
                             using (new ProfilingScope(cmd, renderRequest.hdCamera.profilingSampler))
                             {
                                 cmd.SetInvertCulling(renderRequest.cameraSettings.invertFaceCulling);
-                                ExecuteRenderRequest(renderRequest, renderContext, cmd, AOVRequestData.defaultAOVRequestDataNonAlloc);
+                                m_OctahedralRenderRequestSucceeded = false;
+                                try
+                                {
+                                    ExecuteRenderRequest(renderRequest, renderContext, cmd, AOVRequestData.defaultAOVRequestDataNonAlloc);
+                                }
+                                catch
+                                {
+                                    RetryOctahedralProbeFace(renderRequest);
+                                    throw;
+                                }
                                 cmd.SetInvertCulling(false);
                             }
 
+                            CompleteOctahedralProbeFace(renderRequest, renderContext, cmd);
                             EndRenderRequest(renderRequest);
 
                             // Render XR mirror view once all render requests have been completed

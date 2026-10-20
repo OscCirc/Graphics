@@ -699,7 +699,10 @@ namespace UnityEditor.Rendering.HighDefinition
                     );
                     HDBakingUtilities.CreateParentDirectoryIfMissing(targetFile);
                     Checkout(targetFile);
-                    HDTextureUtilities.WriteTextureToDisk(probeRT, targetFile);
+                    if (probe.useOctahedralRadiance)
+                        WriteOctahedralRadiance(probeRT, targetFile);
+                    else
+                        HDTextureUtilities.WriteTextureToDisk(probeRT, targetFile);
                     break;
                 }
                 case ProbeSettings.ProbeType.PlanarProbe:
@@ -729,6 +732,41 @@ namespace UnityEditor.Rendering.HighDefinition
                 }
                 default: throw new ArgumentOutOfRangeException(nameof(probe.settings.type));
             }
+        }
+
+        internal static void WriteOctahedralRadiance(Texture cube, string file)
+        {
+            var pipeline = (HDRenderPipeline)RenderPipelineManager.currentPipeline;
+            var target = new RenderTexture(Mathf.Max(64, cube.width * 2), Mathf.Max(64, cube.height * 2), 0,
+                GraphicsFormat.R16G16B16A16_SFloat) { name = "Bake raw Oct radiance", useMipMap = false };
+            Texture2D readback = null;
+            var cmd = CommandBufferPool.Get("Bake Cube to raw Oct");
+            try
+            {
+                target.Create();
+                pipeline.ConvertReflectionProbeToOctahedral(cmd, cube, target);
+                Graphics.ExecuteCommandBuffer(cmd);
+                readback = HDTextureUtilities.CopyRenderTextureToTexture2D(target);
+                File.WriteAllBytes(file, readback.EncodeToEXR(Texture2D.EXRFlags.CompressZIP));
+            }
+            finally
+            {
+                CommandBufferPool.Release(cmd);
+                if (readback != null) CoreUtils.Destroy(readback);
+                target.Release();
+                CoreUtils.Destroy(target);
+            }
+        }
+
+        internal static void ConfigureOctahedralImporter(TextureImporter importer, HDProbe probe)
+        {
+            importer.textureShape = TextureImporterShape.Texture2D;
+            importer.sRGBTexture = false;
+            importer.mipmapEnabled = false;
+            importer.wrapMode = TextureWrapMode.Clamp;
+            importer.filterMode = FilterMode.Bilinear;
+            importer.npotScale = TextureImporterNPOTScale.None;
+            importer.maxTextureSize = Mathf.Max(64, (int)probe.cubeResolution * 2);
         }
 
         internal static void ImportAssetAt(HDProbe probe, string file)
@@ -785,6 +823,9 @@ namespace UnityEditor.Rendering.HighDefinition
                 p.ApplyTo(importer);
             }
 
+            // The source border is part of the asset format; presets must not change its shape or generate mips.
+            if (probe.type == ProbeSettings.ProbeType.ReflectionProbe && probe.useOctahedralRadiance)
+                ConfigureOctahedralImporter(importer, probe);
             importer.SaveAndReimport();
         }
 
@@ -829,6 +870,8 @@ namespace UnityEditor.Rendering.HighDefinition
                 var positionSettings = ProbeCapturePositionSettings.ComputeFrom(probe, null);
                 var positionSettingsHash = positionSettings.ComputeHash();
                 var probeSettingsHash = probe.settings.ComputeHash();
+                var octEncodingHash = Hash128.Compute(probe.type == ProbeSettings.ProbeType.ReflectionProbe && probe.useOctahedralRadiance ? 1 : 0);
+                HashUtilities.AppendHash(ref octEncodingHash, ref states[i].probeBakingHashNoBounce);
 
                 HashUtilities.AppendHash(ref positionSettingsHash, ref states[i].probeBakingHashNoBounce);
                 HashUtilities.AppendHash(ref allProbeDependencyHash, ref states[i].probeBakingHashNoBounce);

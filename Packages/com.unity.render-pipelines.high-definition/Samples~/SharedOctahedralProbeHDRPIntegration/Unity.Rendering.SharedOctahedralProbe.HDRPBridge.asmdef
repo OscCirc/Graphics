@@ -1,0 +1,9 @@
+{
+    "name": "Unity.Rendering.SharedOctahedralProbe.HDRPBridge",
+    "rootNamespace": "",
+    "references": [
+        "Unity.Rendering.SharedOctahedralProbe.Experimental",
+        "Unity.RenderPipelines.HighDefinition.Runtime"
+    ],
+    "autoReferenced": true
+}

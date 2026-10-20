@@ -1,0 +1,17 @@
+{
+  "failed": 0,
+  "backend": "DXC with Unity D3D11/XR aliases",
+  "stages": [
+    {
+      "source": "actual Core Blit.hlsl",
+      "profile": "vs_6_0",
+      "entry": "VertQuadPadding"
+    },
+    {
+      "source": "wrapper calling actual OctahedralProbeSource.hlsl",
+      "profile": "ps_6_0",
+      "entry": "Frag"
+    }
+  ],
+  "passed": 2
+}

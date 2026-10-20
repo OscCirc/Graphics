@@ -21,8 +21,9 @@ namespace UnityEngine.Rendering.HighDefinition
             s_AllInstances.Add(this);
         }
 
-        void OnDestroy()
+        protected override void OnDestroy()
         {
+            base.OnDestroy();
             s_AllInstances.Remove(this);
         }
 

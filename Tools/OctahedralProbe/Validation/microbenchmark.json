@@ -1,0 +1,11 @@
+{
+  "scope": "GPU timestamp microbenchmark; excludes camera capture, uploads, Unity scheduling and Lit",
+  "gpu": "NVIDIA GeForce RTX 5060 Laptop GPU",
+  "faceSize": 64,
+  "tileSize": 64,
+  "ggxSamples": 256,
+  "roughnessLevels": 5,
+  "iterations": 20,
+  "sharedCubePrefilterMs": 0.111946,
+  "sixFacesReprojectAndOctPrefilterMs": 0.166597
+}

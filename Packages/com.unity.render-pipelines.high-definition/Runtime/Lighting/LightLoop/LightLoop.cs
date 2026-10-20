@@ -1060,7 +1060,8 @@ namespace UnityEngine.Rendering.HighDefinition
                         probe.settings, probePositionSettings,
                         out _, out var cameraPositionSettings, 0
                     );
-                    capturePosition = cameraPositionSettings.position;
+                    capturePosition = probe.usesExternalOctahedralCapture ? probe.externalOctahedralCapturePosition :
+                        (probe.usesOctahedralRealtime ? probe.octahedralCapturePosition : cameraPositionSettings.position);
                     envLightData.rangeCompressionFactorCompensation = Mathf.Max(probe.rangeCompressionFactor, 1e-6f);
 
                     // Propagate the distance based information to the env light data (only if we are not an infinite projection)
@@ -1482,7 +1483,8 @@ namespace UnityEngine.Rendering.HighDefinition
             // For now we won't display real time probe when rendering one.
             // TODO: We may want to display last frame result but in this case we need to be careful not to update the atlas before all realtime probes are rendered (for frame coherency).
             // Unfortunately we don't have this information at the moment.
-            if (processedProbe.hdProbe.mode == ProbeSettings.Mode.Realtime && hdCamera.camera.cameraType == CameraType.Reflection)
+            if ((processedProbe.hdProbe.mode == ProbeSettings.Mode.Realtime || processedProbe.hdProbe.usesExternalOctahedralCapture) &&
+                hdCamera.camera.cameraType == CameraType.Reflection)
                 return true;
 
             // Discard probe if disabled in debug menu
@@ -1498,7 +1500,7 @@ namespace UnityEngine.Rendering.HighDefinition
                 return true;
 
             // probe.texture can be null when we are adding a reflection probe in the editor
-            if (processedProbe.hdProbe.texture == null)
+            if (processedProbe.hdProbe.texture == null && !processedProbe.hdProbe.usesExternalOctahedralCapture)
                 return true;
 
             return false;

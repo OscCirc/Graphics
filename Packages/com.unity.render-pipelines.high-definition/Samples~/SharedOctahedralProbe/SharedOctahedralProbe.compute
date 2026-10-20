@@ -1,0 +1,140 @@
+#pragma kernel FilterCube
+#pragma kernel CopyFace
+#pragma kernel FilterOct
+#pragma kernel SampleAtlas
+
+#include "SharedOctahedralProbeSampling.hlsl"
+
+// Intentionally self-contained: the same GPU code is tested by the Tuanjie 2022.3 harness.
+// This is a GGX split-sum radiance prefilter, not HDRP's optimized Fibonacci/LUT implementation.
+TextureCube<float4> _CubeTexture;
+Texture2D<float4> _FaceTexture;
+Texture2D<float4> _OctTexture;
+SamplerState sampler_LinearClamp;
+RWTexture2D<float4> _Output;
+int _TileSize, _RawSize, _SampleCount, _Face;
+int2 _Origin;
+float _Roughness;
+Texture2D<float4> _AtlasTexture;
+StructuredBuffer<float4> _Queries;
+RWStructuredBuffer<float4> _Samples;
+float4 _ProbeScaleOffset;
+float _AtlasSize, _MaxMip;
+int _QueryCount;
+
+float2 EncodeOct(float3 n)
+{
+    n /= max(dot(abs(n), 1.0), 1e-6);
+    float t = saturate(-n.z);
+    return (n.xy + float2(n.x >= 0 ? t : -t, n.y >= 0 ? t : -t)) * 0.5 + 0.5;
+}
+
+float3 DecodeOct(float2 uv)
+{
+    float2 f = uv * 2.0 - 1.0;
+    float3 n = float3(f, 1.0 - abs(f.x) - abs(f.y));
+    float t = max(-n.z, 0.0);
+    n.xy += float2(n.x >= 0 ? -t : t, n.y >= 0 ? -t : t);
+    return normalize(n);
+}
+
+// The caller only extends one texel beyond an edge. Same adjacent-tile rules as Common.hlsl.
+float2 RepeatOct(float2 uv)
+{
+    float u = uv.x, v = uv.y;
+    if (u < 0)
+        return v < 0 ? float2(1 + u, 1 + v) : (v < 1 ? float2(-u, 1 - v) : float2(1 + u, v - 1));
+    if (u < 1)
+        return v < 0 ? float2(1 - u, -v) : (v < 1 ? uv : float2(1 - u, 2 - v));
+    return v < 0 ? float2(u - 1, 1 + v) : (v < 1 ? float2(2 - u, 1 - v) : float2(u - 1, v - 1));
+}
+
+float3 PixelDirection(uint2 pixel)
+{
+    // Every mip has exactly one border texel on each side, including the coarsest published mip.
+    float2 uv = (float2(pixel) + 0.5 - 1.0) / (_TileSize - 2.0);
+    return DecodeOct(RepeatOct(uv));
+}
+
+static const float3 kFaceU[6] = {
+    float3(0,0,-1), float3(0,0,1), float3(1,0,0), float3(1,0,0), float3(1,0,0), float3(-1,0,0)
+};
+static const float3 kFaceV[6] = {
+    float3(0,-1,0), float3(0,-1,0), float3(0,0,1), float3(0,0,-1), float3(0,-1,0), float3(0,-1,0)
+};
+
+int CubeFace(float3 d)
+{
+    float3 a = abs(d);
+    if (a.x >= a.y && a.x >= a.z) return d.x >= 0 ? 0 : 1;
+    if (a.y >= a.z) return d.y >= 0 ? 2 : 3;
+    return d.z >= 0 ? 4 : 5;
+}
+
+[numthreads(8, 8, 1)]
+void CopyFace(uint3 id : SV_DispatchThreadID)
+{
+    if (any(id.xy >= (uint)_TileSize)) return;
+    float3 d = PixelDirection(id.xy);
+    if (CubeFace(d) != _Face) return; // Preserve all previously submitted faces.
+    float3 n = cross(kFaceV[_Face], kFaceU[_Face]);
+    float2 uv = float2(dot(d, kFaceU[_Face]), dot(d, kFaceV[_Face])) / dot(d, n) * 0.5 + 0.5;
+    _Output[id.xy] = float4(_FaceTexture.SampleLevel(sampler_LinearClamp, uv, 0).rgb, 1);
+}
+
+float3 SampleSource(float3 direction, bool octSource)
+{
+    if (!octSource) return _CubeTexture.SampleLevel(sampler_LinearClamp, direction, 0).rgb;
+    float2 uv = (EncodeOct(direction) * (_RawSize - 2.0) + 1.0) / _RawSize;
+    return _OctTexture.SampleLevel(sampler_LinearClamp, uv, 0).rgb;
+}
+
+float3 Prefilter(float3 n, bool octSource)
+{
+    if (_Roughness < 1e-5) return SampleSource(n, octSource);
+    float3 up = abs(n.z) < 0.999 ? float3(0, 0, 1) : float3(1, 0, 0);
+    float3 tangent = normalize(cross(up, n));
+    float3 bitangent = cross(n, tangent);
+    float3 sum = 0;
+    float weight = 0;
+    float a2 = _Roughness * _Roughness;
+    for (uint i = 0; i < (uint)_SampleCount; ++i)
+    {
+        float2 xi = float2((float)i / _SampleCount, reversebits(i) * 2.3283064365386963e-10);
+        float phi = 6.28318530718 * xi.x;
+        float cosTheta = sqrt((1.0 - xi.y) / (1.0 + (a2 - 1.0) * xi.y));
+        float sinTheta = sqrt(saturate(1.0 - cosTheta * cosTheta));
+        float3 h = tangent * (cos(phi) * sinTheta) + bitangent * (sin(phi) * sinTheta) + n * cosTheta;
+        float3 l = normalize(2.0 * dot(n, h) * h - n);
+        float ndotl = saturate(dot(n, l));
+        if (ndotl > 0)
+        {
+            sum += SampleSource(l, octSource) * ndotl;
+            weight += ndotl;
+        }
+    }
+    return sum / max(weight, 1e-6);
+}
+
+[numthreads(8, 8, 1)]
+void FilterCube(uint3 id : SV_DispatchThreadID)
+{
+    if (any(id.xy >= (uint)_TileSize)) return;
+    _Output[_Origin + id.xy] = float4(Prefilter(PixelDirection(id.xy), false), 1);
+}
+
+[numthreads(8, 8, 1)]
+void FilterOct(uint3 id : SV_DispatchThreadID)
+{
+    if (any(id.xy >= (uint)_TileSize)) return;
+    _Output[_Origin + id.xy] = float4(Prefilter(PixelDirection(id.xy), true), 1);
+}
+
+[numthreads(64, 1, 1)]
+void SampleAtlas(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= (uint)_QueryCount) return;
+    float4 query = _Queries[id.x];
+    _Samples[id.x] = float4(SampleSharedOctProbe(_AtlasTexture, sampler_LinearClamp,
+        query.xyz, query.w, _ProbeScaleOffset, _AtlasSize, _MaxMip), 1);
+}
